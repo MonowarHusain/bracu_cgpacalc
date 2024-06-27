@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BRACU CGPA Calculator</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha384-<your-sha-hash>" crossorigin="anonymous">
+<style>
+html, body {
+  background: linear-gradient(135deg, #253494, #999999, #000000); /* Gradient background */
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-attachment: fixed; /* Fix background position */
+}
+
+body {
+  font-family: Cambria, serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #000; /* All fonts are black */
+}
+
+.container {
+  position: relative; /* Make it a positioned container for logo positioning */
+  background-color: rgba(240, 240, 240, 0.8); /* Semi-transparent light gray background for container */
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  width: 300px;
+  text-align: center;
+}
+
+
+input[type="number"] {
+  width: calc(100% - 16px); /* Adjusted to accommodate border */
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  color: black; /* Change font color to black */
+  background-color: rgba(255, 255, 255, 0.5); /* Set background to transparent white */
+}
+
+
+/* Logo Styles */
+.logo {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 50px; /* Adjust width as needed */
+}
+
+input[type="submit"] {
+  background-color: #4caf50;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 10px;
+}
+
+input[type="submit"]:hover {
+  background-color: #45a049;
+}
+
+p {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #b3b3cc;
+}
+
+select {
+  width: calc(100% - 16px); /* Adjusted to accommodate border */
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  color: black; /* Set font color to black */
+  background-color:  rgba(255, 255, 255, 0.5); /* Set background to transparent white */
+
+}
+
+
+.result-box {
+  background-color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px; /* Decreased padding */
+  margin-top: 20px;
+  text-align: center; /* Center the text */
+  color: white; /* Font color inside the result box */
+  animation: slideInDown 0.5s forwards;
+  display: none; /* Initially hidden */
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.result-box p {
+  font-size: 18px; /* Increased font size */
+}
+
+.red {
+  color: red;
+}
+
+.social-icons {
+  margin-top: 20px;
+}
+
+.social-icons a {
+  margin: 0 5px;
+  text-decoration: none;
+  color: #4caf50; /* Icon color */
+  font-size: 24px;
+}
+
+/* Blinking animation */
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.developer-info {
+  color: black; 
+}
+
+.blink {
+  animation: blink 1s infinite;
+}
+.logo {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 50px; /* Adjust width as needed */
+  animation: blink 1s infinite; /* Adding blinking animation */
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="https://www.bracu.ac.bd">
+    <img src="https://www.bracu.ac.bd/sites/default/files/resources/media/bracu_logo.png" alt="Logo" class="logo">
+  </a>
+  <h1 class="blink">BRACU CGPA Calculator</h1>
+  <!-- Rest of the content remains the same -->
+
+
+  <form id="cgpaForm">
+    <label for="currentCGPA">Current CGPA:</label>
+    <input type="number" id="currentCGPA" step="0.01" placeholder="Enter current CGPA (e.g., 3.50)" required>
+    <label for="completedCourses">Completed Courses:</label>
+    <input type="number" id="completedCourses" placeholder="Enter number of completed courses" min="0" required>
+    <label for="semesterCourses">Courses Enrolled in this Semester:</label>
+    <input type="number" id="semesterCourses" placeholder="Enter number of courses enrolled in this semester" min="0" required>
+    <div id="gradeInputs">
+      <!-- Grade inputs will be added here dynamically -->
+    </div>
+    <input type="submit" id="calculateButton" value="Calculate CGPA">
+    <input
+type="button" id="startOverButton" value="Start Over" style="display: none;">
+  </form>
+  <div id="errorAlert" style="display: none;"></div>
+  <div id="cgpaResult" class="result-box" style="display: none;"></div>
+  <div class="social-icons">
+    <a href="https://github.com/MonowarHusain" target="_blank"><i class="fab fa-github"></i></a>
+    <a href="https://twitter.com/MonowarHusain" target="_blank"><i class="fab fa-twitter"></i></a>
+    <a href="https://www.linkedin.com/in/MonowarHusain" target="_blank"><i class="fab fa-linkedin"></i></a>
+  </div>
+ <p class="developer-info">Developed by <a href="https://monowar.me">Monowar Husain</a></p>
+
+</div>
+
+<script>
+document.getElementById('cgpaForm').addEventListener('submit', function(event) {
+  event.preventDefault();
+  calculateCGPA();
+});
+
+function calculateCGPA() {
+  var currentCGPA = parseFloat(document.getElementById('currentCGPA').value);
+  var completedCourses = parseInt(document.getElementById('completedCourses').value);
+  var semesterCourses = parseInt(document.getElementById('semesterCourses').value);
+
+  if (isNaN(currentCGPA) || isNaN(completedCourses) || isNaN(semesterCourses)) {
+    alert('Invalid input. Please enter valid numbers.');
+    return;
+  }
+
+  if (currentCGPA > 4.0) {
+    alert('Current CGPA cannot be greater than 4.00.');
+    return;
+  }
+
+  if (semesterCourses < 3) {
+    var confirmation = confirm('Taking less than 3 courses may affect your academic progress. Have you obtained permission from the chairperson to take less than 3 courses?');
+    // Execution continues regardless of the user's choice
+  }
+
+  var totalCreditHours = completedCourses * 3; // Assuming each completed course is 3 credit hours
+  var totalQualityPoints = currentCGPA * totalCreditHours;
+
+  // Calculate total quality points and credit hours for courses in this semester
+  var semesterQualityPoints = 0;
+  for (var i = 1; i <= semesterCourses; i++) {
+    var gradeSelect = document.getElementById('grade' + i);
+    var selectedGrade = parseFloat(gradeSelect.options[gradeSelect.selectedIndex].value);
+    semesterQualityPoints += selectedGrade * 3; // Assuming each course is 3 credit hours
+  }
+
+  totalQualityPoints += semesterQualityPoints;
+  totalCreditHours += semesterCourses * 3; // Assuming each course is 3 credit hours
+
+  var cgpa = totalQualityPoints / totalCreditHours;
+  displayCGPA(cgpa);
+}
+
+// Function to display CGPA without using alert
+function displayCGPA(cgpa) {
+  var cgpaResultContainer = document.getElementById('cgpaResult');
+  cgpaResultContainer.style.display = 'block';
+  var cgpaHtml = '<p>Your CGPA: <span class="' + (cgpa < 2.0 ? 'red' : '') + '">' + cgpa.toFixed(2) + '</span></p>';
+  cgpaResultContainer.innerHTML = cgpaHtml;
+  if (cgpa < 2.0) {
+    var probationMessage = 'Your CGPA is less than 2.00. You are going under probation. Please consult your advisor as soon as possible.';
+    alert(probationMessage);
+  }
+  // Change the button to "Start Over"
+  document.getElementById('calculateButton').style.display = 'none';
+  document.getElementById('startOverButton').style.display = 'inline-block';
+}
+
+// Function to reload the page (start over)
+document.getElementById('startOverButton').addEventListener('click', function() {
+  location.reload();
+});
+
+// Function to dynamically generate input fields for course GPAs
+function generateGradeInputs() {
+  var semesterCourses = parseInt(document.getElementById('semesterCourses').value);
+  var gradeInputsContainer = document.getElementById('gradeInputs');
+  gradeInputsContainer.innerHTML = ''; // Clear previous inputs
+
+  for (var i = 1; i <= semesterCourses; i++) {
+    var inputLabel = document.createElement('label');
+    inputLabel.setAttribute('for', 'grade' + i);
+    inputLabel.textContent = 'GPA for Course ' + i + ':';
+    
+    var inputField = document.createElement('select');
+    inputField.setAttribute('id', 'grade' + i);
+    inputField.setAttribute('required', true);
+    
+    var optionDefault = document.createElement('option');
+    optionDefault.value = '';
+    optionDefault.text = 'Select GPA';
+    inputField.appendChild(optionDefault);
+
+    // Add GPA options
+    var gpaValues = [4.0, 3.7, 3.3, 3.0, 2.7, 2.3, 2.0, 1.7, 1.3, 1.0, 0.7, 0.0];
+    var gpaLetters = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F']; // Corresponding GPA letters
+    for (var j = 0; j < gpaValues.length; j++) {
+      var option = document.createElement('option');
+      option.value = gpaValues[j];
+      option.text = gpaLetters[j] + ' (' + gpaValues[j] + ')';
+      inputField.appendChild(option);
+    }
+
+    var br = document.createElement('br');
+
+    gradeInputsContainer.appendChild(inputLabel);
+    gradeInputsContainer.appendChild(inputField);
+    gradeInputsContainer.appendChild(br);
+  }
+}
+
+// Generate grade input fields when the number of semester courses is changed
+document.getElementById('semesterCourses').addEventListener('change', generateGradeInputs);
+</script>
+</body>
+</html>
