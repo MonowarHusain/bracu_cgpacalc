@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BRACU CGPA Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+  <div class="max-w-md mx-auto py-10 px-4">
+    <header class="text-center mb-8">
+      <img src="https://www.bracu.ac.bd/sites/default/files/resources/media/bracu_logo.png"
+        class="w-16 mx-auto mb-4 animate-pulse" alt="Logo">
+      <h1 class="text-3xl font-bold tracking-tight">CGPA <span class="text-blue-500">Pro</span></h1>
+      <p class="text-slate-400 text-sm">BRAC University Academic Planner</p>
+    </header>
+
+    <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6 shadow-xl">
+      <label class="block text-sm font-medium mb-2">Auto-fill from Transcript</label>
+      <input type="file" id="pdfUpload" accept=".pdf"
+        class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+      <p id="pdfStatus" class="mt-2 text-xs text-slate-500 italic"></p>
+    </div>
+
+    <form id="cgpaForm" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs uppercase font-bold text-slate-500 mb-1">Current CGPA</label>
+          <input type="number" id="currentCGPA" step="0.01" required
+            class="w-full bg-slate-700 border-0 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs uppercase font-bold text-slate-500 mb-1">Credits Done</label>
+          <input type="number" id="completedCredits" required
+            class="w-full bg-slate-700 border-0 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-slate-700">
+        <label class="block text-xs uppercase font-bold text-slate-500 mb-2">New Semester Courses</label>
+        <div id="courseInputs" class="space-y-3">
+        </div>
+        <button type="button" id="addCourseBtn" class="mt-3 text-sm text-blue-400 hover:text-blue-300 font-medium">+ Add
+          Course</button>
+      </div>
+
+      <button type="submit"
+        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-900/20">
+        Calculate & Save Progress
+      </button>
+    </form>
+
+    <div id="resultCard"
+      class="hidden mt-8 p-6 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl text-center shadow-2xl">
+      <p class="text-blue-100 text-sm uppercase tracking-widest font-semibold">Projected CGPA</p>
+      <h2 id="finalGPA" class="text-6xl font-black my-2">0.00</h2>
+      <p id="statusMsg" class="text-blue-200 text-xs italic"></p>
+      <button onclick="location.reload()"
+        class="mt-4 text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-white">Start Over</button>
+    </div>
+
+    <footer class="mt-12 text-center text-slate-600 text-xs italic">
+      Developed by <a href="https://monowar.me" class="hover:text-blue-400 underline">Monowar Husain</a>
+    </footer>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
