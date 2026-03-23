@@ -1,250 +1,301 @@
 import { parseBracuTranscript } from './parser.js';
 
-/**
- * BRACU CGPA Dash - Application Controller
- * Manages UI, Persistence, and Academic Logic.
- */
+const KEY = 'bracu_dash_v6_pro';
 
-const STORAGE_KEY = 'bracu_dashboard_data_v3';
-
-const ui = {
+const elements = {
+    name: document.getElementById('studentName'),
+    initial: document.getElementById('nameInitial'),
+    enrollment: document.getElementById('enrollmentSem'),
+    cgpa: document.getElementById('currentCGPA'),
+    credits: document.getElementById('completedCredits'),
+    container: document.getElementById('courseInputs'),
+    finalGpa: document.getElementById('finalGPA'),
+    projCredits: document.getElementById('projectedCredits'),
     pdfInput: document.getElementById('pdfUpload'),
     pdfStatus: document.getElementById('pdfStatus'),
-    currentGPA: document.getElementById('currentCGPA'),
-    currentCredits: document.getElementById('completedCredits'),
-    courseContainer: document.getElementById('courseInputs'),
-    finalGPA: document.getElementById('finalGPA'),
-    projectedCredits: document.getElementById('projectedCredits'),
-    standingTag: document.getElementById('standingTag'),
-    historySec: document.getElementById('historySection'),
-    historyBody: document.getElementById('historyBody'),
     addBtn: document.getElementById('addCourseBtn'),
-    resetBtn: document.getElementById('resetApp')
+    historyBody: document.getElementById('historyBody'),
+
+    themeBtn: document.getElementById('themeToggle'),
+    sidebarOverlay: document.getElementById('sidebarOverlay'),
+    sidebar: document.getElementById('historySidebar'),
+    openHistory: document.getElementById('openHistory'),
+    closeHistory: document.getElementById('closeHistory'),
+
+    // Reset Dropdown specific
+    resetMenuBtn: document.getElementById('resetMenuBtn'),
+    resetDropdown: document.getElementById('resetDropdown'),
+    resetFull: document.getElementById('resetFull'),
+    resetHistory: document.getElementById('resetHistoryOnly'),
+
+    helpBtn: document.getElementById('helpBtn'),
+    helpModal: document.getElementById('helpModal'),
+    closeHelp: document.getElementById('closeHelp')
 };
 
-// --- 1. INITIALIZATION (Restore State) ---
+// --- INITIALIZATION ---
 window.addEventListener('DOMContentLoaded', () => {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (localStorage.theme === 'light') document.documentElement.classList.remove('dark');
 
+    const saved = JSON.parse(localStorage.getItem(KEY));
     if (saved) {
-        // Restore manual inputs
-        ui.currentGPA.value = saved.cgpa || "";
-        ui.currentCredits.value = saved.credits || "";
+        elements.name.value = saved.name || "";
+        elements.enrollment.value = saved.enrollment || "";
+        elements.cgpa.value = saved.cgpa || "";
+        elements.credits.value = saved.credits || "";
+        updateInitial(saved.name);
 
-        // Restore planned course rows
-        if (saved.plannedCourses && saved.plannedCourses.length > 0) {
-            ui.courseContainer.innerHTML = '';
-            saved.plannedCourses.forEach(c => addCourseRow(c.grade, c.credits, c.retakeOf));
-        } else {
-            addCourseRow();
-        }
+        if (saved.courses && saved.courses.length > 0) {
+            saved.courses.forEach(c => addCourseRow(c.grade, c.credits, c.retakeTarget));
+        } else { addCourseRow(); }
 
-        // Restore the history table if it existed [cite: 13]
-        if (saved.transcriptHistory) {
-            renderHistoryTable(saved.transcriptHistory);
-        }
+        if (saved.history) renderHistory(saved.history, saved.semesters);
     } else {
         addCourseRow();
     }
 
-    // Live sync inputs
-    ui.currentGPA.addEventListener('input', updateUI);
-    ui.currentCredits.addEventListener('input', updateUI);
-    updateUI();
+    elements.name.oninput = (e) => { updateInitial(e.target.value); calculate(); };
+    elements.enrollment.oninput = calculate;
+    elements.cgpa.oninput = calculate;
+    elements.credits.oninput = calculate;
+    calculate();
 });
 
-// --- 2. THE CALCULATION ENGINE (Handles Retakes) ---
-function updateUI() {
-    const currentCGPA = parseFloat(ui.currentGPA.value) || 0;
-    const currentCredits = parseFloat(ui.currentCredits.value) || 0;
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    const history = saved?.transcriptHistory || [];
+function updateInitial(name) {
+    elements.initial.innerText = name && name.trim().length > 0 ? name.trim().charAt(0).toUpperCase() : "U";
+}
+
+// --- CALCULATION ENGINE ---
+function calculate() {
+    const currentCGPA = parseFloat(elements.cgpa.value) || 0;
+    const currentCredits = parseFloat(elements.credits.value) || 0;
+    const saved = JSON.parse(localStorage.getItem(KEY)) || {};
+    const history = saved.history || [];
 
     let totalPoints = currentCGPA * currentCredits;
     let totalCredits = currentCredits;
-    const planned = [];
+    const savedCourses = [];
 
-    // Process every planned row
-    document.querySelectorAll('#courseInputs > div').forEach(row => {
-        const gradeVal = row.querySelector('.row-grade').value;
-        const credsVal = row.querySelector('.row-credits').value;
+    document.querySelectorAll('.course-row').forEach(row => {
+        const grade = parseFloat(row.querySelector('.row-grade').value);
+        const creds = parseFloat(row.querySelector('.row-credits').value) || 0;
         const isRetake = row.querySelector('.is-retake').checked;
-        const retakeTargetCode = row.querySelector('.retake-selection').value;
+        const target = row.querySelector('.retake-target').value;
 
-        const grade = parseFloat(gradeVal);
-        const creds = parseFloat(credsVal) || 0;
-
-        if (isRetake && retakeTargetCode) {
-            // Find old grade in history (e.g., MAT216) to replace it [cite: 13]
-            const oldCourse = history.find(c => c.code === retakeTargetCode);
-            if (oldCourse) {
-                // Subtract old points. Credits are already in currentCredits [cite: 13]
-                totalPoints -= (getNumericPoints(oldCourse.grade) * oldCourse.credits);
-            }
+        if (isRetake && target) {
+            const old = history.find(h => h.code === target);
+            if (old) totalPoints -= (getPoints(old.grade) * old.credits);
         } else {
-            // New course: Add to total credit count
             totalCredits += creds;
         }
 
         totalPoints += (grade * creds);
-        planned.push({ grade: gradeVal, credits: credsVal, retakeOf: isRetake ? retakeTargetCode : null });
+        savedCourses.push({ grade, credits: creds, retakeTarget: isRetake ? target : null });
     });
 
-    const final = totalCredits === 0 ? 0 : totalPoints / totalCredits;
+    const final = totalCredits === 0 ? 0 : (totalPoints / totalCredits);
+    elements.finalGpa.innerText = final.toFixed(2);
+    elements.projCredits.innerText = totalCredits;
 
-    // Update UI
-    ui.finalGPA.innerText = final.toFixed(2);
-    ui.projectedCredits.innerText = totalCredits.toFixed(1);
-    updateStandingBadge(final);
-
-    // PERSIST DATA (Spread existing data to keep history)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(KEY, JSON.stringify({
         ...saved,
+        name: elements.name.value,
+        enrollment: elements.enrollment.value,
         cgpa: currentCGPA,
         credits: currentCredits,
-        plannedCourses: planned
+        courses: savedCourses
     }));
 }
 
-// --- 3. DYNAMIC ROW MANAGEMENT ---
-function addCourseRow(defaultG = "4.0", defaultC = "3", retakeOf = null) {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    const history = saved?.transcriptHistory || [];
+// --- PLANNER UI ---
+function addCourseRow(defaultG = "4.0", defaultC = "3", target = null) {
+    const saved = JSON.parse(localStorage.getItem(KEY));
+    const history = saved?.history || [];
 
     const div = document.createElement('div');
-    div.className = "p-5 bg-slate-900/60 rounded-2xl border border-slate-800 mb-4 transition-all hover:border-slate-700";
-
-    // Generate options from imported PDF data (e.g., CSE110, MAT216) [cite: 13]
-    const historyOptions = history.map(c =>
-        `<option value="${c.code}" ${retakeOf === c.code ? 'selected' : ''}>${c.code} (Prev: ${c.grade})</option>`
-    ).join('');
+    div.className = "course-row p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl transition-all";
 
     div.innerHTML = `
-        <div class="flex flex-wrap md:flex-nowrap gap-4 mb-4">
-            <div class="flex-1">
-                <label class="text-[10px] font-bold text-slate-500 block mb-1 uppercase tracking-wider">Predicted Grade</label>
-                <select class="row-grade w-full bg-slate-800 text-white rounded-xl p-3 text-sm border border-slate-700 outline-none focus:border-blue-500">
-                    <option value="4.0" ${defaultG === "4.0" ? 'selected' : ''}>A (4.00)</option>
-                    <option value="3.7" ${defaultG === "3.7" ? 'selected' : ''}>A- (3.70)</option>
-                    <option value="3.3" ${defaultG === "3.3" ? 'selected' : ''}>B+ (3.30)</option>
-                    <option value="3.0" ${defaultG === "3.0" ? 'selected' : ''}>B (3.00)</option>
-                    <option value="2.0" ${defaultG === "2.0" ? 'selected' : ''}>C (2.00)</option>
-                    <option value="0.0" ${defaultG === "0.0" ? 'selected' : ''}>F (0.00)</option>
-                </select>
-            </div>
-            <div class="w-28">
-                <label class="text-[10px] font-bold text-slate-500 block mb-1 uppercase tracking-wider">Credits</label>
-                <input type="number" value="${defaultC}" class="row-credits w-full bg-slate-800 text-white rounded-xl p-3 text-sm border border-slate-700 text-center outline-none focus:border-blue-500">
-            </div>
-            <button class="remove-row self-end p-3 text-slate-600 hover:text-red-500 transition-colors"><i class="fas fa-trash-alt"></i></button>
+        <div class="flex gap-4 mb-3">
+            <select class="row-grade flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold outline-none focus:border-blue-500">
+                <option value="4.0" ${defaultG == 4.0 ? 'selected' : ''}>A (4.0)</option>
+                <option value="3.7" ${defaultG == 3.7 ? 'selected' : ''}>A- (3.7)</option>
+                <option value="3.3" ${defaultG == 3.3 ? 'selected' : ''}>B+ (3.3)</option>
+                <option value="3.0" ${defaultG == 3.0 ? 'selected' : ''}>B (3.0)</option>
+                <option value="2.7" ${defaultG == 2.7 ? 'selected' : ''}>B- (2.7)</option>
+                <option value="2.3" ${defaultG == 2.3 ? 'selected' : ''}>C+ (2.3)</option>
+                <option value="2.0" ${defaultG == 2.0 ? 'selected' : ''}>C (2.0)</option>
+                <option value="1.0" ${defaultG == 1.0 ? 'selected' : ''}>D (1.0)</option>
+                <option value="0.0" ${defaultG == 0.0 ? 'selected' : ''}>F (0.0)</option>
+            </select>
+            <input type="number" value="${defaultC}" class="row-credits w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-center outline-none focus:border-blue-500">
+            <button class="remove-btn text-slate-400 hover:text-red-500 p-2"><i class="fas fa-trash"></i></button>
         </div>
-        <div class="flex items-center gap-3 pt-3 border-t border-slate-800">
-            <input type="checkbox" class="is-retake w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600" ${retakeOf ? 'checked' : ''}>
-            <label class="text-[11px] font-semibold text-slate-400 uppercase">Retake/Repeat of Previous Course</label>
-            <select class="retake-selection flex-1 bg-slate-800 text-white rounded-lg p-2 text-xs border border-slate-700 ${retakeOf ? '' : 'hidden'}">
-                <option value="">Select Course to Replace</option>
-                ${historyOptions}
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <input type="checkbox" class="is-retake w-4 h-4" ${target ? 'checked' : ''}>
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Retake Old Course</span>
+            <select class="retake-target flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-1 text-[10px] ${target ? '' : 'hidden'}">
+                <option value="">Select Previous Course...</option>
+                ${history.map(h => `<option value="${h.code}" ${target === h.code ? 'selected' : ''}>${h.code} (${h.grade})</option>`).join('')}
             </select>
         </div>
     `;
+    elements.container.appendChild(div);
 
-    ui.courseContainer.appendChild(div);
-
-    // Row Logic
-    const check = div.querySelector('.is-retake');
-    const select = div.querySelector('.retake-selection');
-
-    check.onchange = () => {
-        select.classList.toggle('hidden', !check.checked);
-        updateUI();
+    div.querySelector('.is-retake').onchange = (e) => {
+        div.querySelector('.retake-target').classList.toggle('hidden', !e.target.checked);
+        calculate();
     };
-    select.onchange = updateUI;
-    div.querySelector('.row-grade').onchange = updateUI;
-    div.querySelector('.row-credits').oninput = updateUI;
-    div.querySelector('.remove-row').onclick = () => { div.remove(); updateUI(); };
+    div.querySelector('.row-grade').onchange = calculate;
+    div.querySelector('.row-credits').oninput = calculate;
+    div.querySelector('.remove-btn').onclick = () => { div.remove(); calculate(); };
 }
 
-// --- 4. PDF TRANSCRIPT INTEGRATION ---
-ui.pdfInput.addEventListener('change', async (e) => {
+// --- HISTORY (GRADES) UI ---
+function renderHistory(courses, semesters = []) {
+    if (!courses || courses.length === 0) {
+        elements.historyBody.innerHTML = `<div class="text-center text-slate-500 text-xs mt-10">No grades imported yet.</div>`;
+        return;
+    }
+
+    const recentTwo = semesters.slice(-2);
+    elements.historyBody.innerHTML = courses.map(c => {
+        const isEligible = recentTwo.includes(c.semester);
+        return `
+            <div class="p-3 rounded-xl border ${isEligible ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'} flex justify-between items-center group">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-xs text-blue-500">${c.code}</span>
+                        <span class="text-[10px] font-black px-2 py-0.5 rounded ${isEligible ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}">${c.grade}</span>
+                    </div>
+                    <p class="text-[9px] text-slate-500 font-bold mt-1 uppercase">${c.semester}</p>
+                </div>
+                <button class="delete-grade-btn text-slate-300 hover:text-red-500 transition-colors p-2" data-code="${c.code}" title="Delete this course">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    document.querySelectorAll('.delete-grade-btn').forEach(btn => {
+        btn.onclick = () => deleteHistoryCourse(btn.getAttribute('data-code'));
+    });
+}
+
+function deleteHistoryCourse(code) {
+    if (confirm(`Remove ${code} from your saved grades? This will also update your Current Standing.`)) {
+        let saved = JSON.parse(localStorage.getItem(KEY)) || {};
+        if (saved.history) {
+            saved.history = saved.history.filter(c => c.code !== code);
+
+            let basePoints = 0;
+            let baseCredits = 0;
+
+            saved.history.forEach(c => {
+                basePoints += (getPoints(c.grade) * c.credits);
+                baseCredits += c.credits;
+            });
+
+            const newBaseCGPA = baseCredits === 0 ? 0 : (basePoints / baseCredits);
+            elements.cgpa.value = newBaseCGPA.toFixed(2);
+            elements.credits.value = baseCredits;
+
+            saved.cgpa = elements.cgpa.value;
+            saved.credits = elements.credits.value;
+            localStorage.setItem(KEY, JSON.stringify(saved));
+
+            renderHistory(saved.history, saved.semesters);
+            calculate();
+        }
+    }
+}
+
+function getPoints(g) {
+    const table = { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 };
+    return table[g.split(' ')[0]] || 0;
+}
+
+// --- PDF IMPORT ---
+elements.pdfInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    ui.pdfStatus.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Syncing Transcript...`;
+    elements.pdfStatus.classList.remove('hidden');
+    elements.pdfStatus.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing Gradesheet...`;
 
-    const reader = new FileReader();
-    reader.onload = async function () {
-        const typedarray = new Uint8Array(this.result);
-        const pdf = await pdfjsLib.getDocument(typedarray).promise;
-        let text = "";
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+    let fullText = "";
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            text += content.items.map(s => s.str).join(" ");
-        }
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(s => s.str).join(" ");
+    }
 
-        const data = parseBracuTranscript(text);
+    const data = parseBracuTranscript(fullText);
+    const saved = JSON.parse(localStorage.getItem(KEY)) || {};
 
-        // Auto-fill Cumulative Stats (e.g., 3.49 CGPA, 51.00 Credits) [cite: 13]
-        ui.currentGPA.value = data.currentCGPA;
-        ui.currentCredits.value = data.completedCredits;
+    localStorage.setItem(KEY, JSON.stringify({
+        ...saved,
+        name: data.studentName,
+        enrollment: data.enrollmentSemester,
+        cgpa: data.currentCGPA,
+        credits: data.completedCredits,
+        history: data.courses,
+        semesters: data.semesters
+    }));
 
-        // Save History and Stats
-        const currentData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            ...currentData,
-            cgpa: data.currentCGPA,
-            credits: data.completedCredits,
-            transcriptHistory: data.courses
-        }));
+    location.reload();
+};
 
-        renderHistoryTable(data.courses);
-        ui.pdfStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle"></i> Profile Synced Successfully</span>`;
-        updateUI();
+// --- EVENTS & TOGGLES ---
+elements.addBtn.onclick = () => { addCourseRow(); calculate(); };
+elements.themeBtn.onclick = () => {
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.theme = isDark ? 'dark' : 'light';
+};
 
-        // Refresh rows to update retake dropdowns with new history
-        refreshAllRows();
-    };
-    reader.readAsArrayBuffer(file);
+// Sidebar Handlers
+elements.openHistory.onclick = () => {
+    elements.sidebarOverlay.classList.remove('hidden');
+    setTimeout(() => elements.sidebar.classList.add('active'), 10);
+};
+elements.closeHistory.onclick = () => {
+    elements.sidebar.classList.remove('active');
+    setTimeout(() => elements.sidebarOverlay.classList.add('hidden'), 300);
+};
+
+// Help Modal Handlers
+elements.helpBtn.onclick = () => elements.helpModal.classList.remove('hidden');
+elements.closeHelp.onclick = () => elements.helpModal.classList.add('hidden');
+
+// NEW: Reset Menu Dropdown Click Logic
+elements.resetMenuBtn.onclick = (e) => {
+    e.stopPropagation(); // Prevents instant closure
+    elements.resetDropdown.classList.toggle('hidden');
+};
+
+// Close Reset dropdown if user clicks anywhere else on the screen
+document.addEventListener('click', (e) => {
+    if (!elements.resetMenuBtn.contains(e.target) && !elements.resetDropdown.contains(e.target)) {
+        elements.resetDropdown.classList.add('hidden');
+    }
 });
 
-function renderHistoryTable(courses) {
-    ui.historySec.classList.remove('hidden');
-    ui.historyBody.innerHTML = courses.map(c => `
-        <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-            <td class="py-3 font-mono text-blue-400 text-xs">${c.code}</td>
-            <td class="py-3 text-slate-400 text-center text-xs">${c.credits.toFixed(1)}</td>
-            <td class="py-3 text-right font-bold text-slate-200 text-xs">${c.grade}</td>
-        </tr>
-    `).join('');
-}
-
-// --- 5. UTILITIES ---
-function getNumericPoints(gradeStr) {
-    const grades = { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.0, 'F': 0.0 };
-    return grades[gradeStr.split(' ')[0]] || 0.0;
-}
-
-function updateStandingBadge(gpa) {
-    if (gpa >= 3.7) {
-        ui.standingTag.className = "text-[10px] font-bold mt-4 px-3 py-1 rounded-full inline-block bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-        ui.standingTag.innerText = "VICE CHANCELLOR'S LIST";
-    } else if (gpa >= 3.5) {
-        ui.standingTag.className = "text-[10px] font-bold mt-4 px-3 py-1 rounded-full inline-block bg-blue-500/10 text-blue-400 border border-blue-500/20";
-        ui.standingTag.innerText = "DEAN'S LIST";
-    } else {
-        ui.standingTag.className = "text-[10px] font-bold mt-4 px-3 py-1 rounded-full inline-block bg-slate-800 text-slate-500";
-        ui.standingTag.innerText = "ACADEMIC STANDING: GOOD";
+// Reset Actions
+elements.resetFull.onclick = () => {
+    if (confirm("DANGER: Wipe all data, settings, and planned courses?")) {
+        localStorage.removeItem(KEY);
+        location.reload();
     }
-}
-
-function refreshAllRows() {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.plannedCourses) {
-        ui.courseContainer.innerHTML = '';
-        saved.plannedCourses.forEach(c => addCourseRow(c.grade, c.credits, c.retakeOf));
+};
+elements.resetHistory.onclick = () => {
+    if (confirm("Clear imported grades? Your current CGPA will remain.")) {
+        let saved = JSON.parse(localStorage.getItem(KEY)) || {};
+        saved.history = [];
+        saved.semesters = [];
+        localStorage.setItem(KEY, JSON.stringify(saved));
+        location.reload();
     }
-}
-
-ui.addBtn.onclick = () => { addCourseRow(); updateUI(); };
-ui.resetBtn.onclick = () => { if (confirm("This will wipe all imported history and planned courses. Continue?")) { localStorage.clear(); location.reload(); } };
+};
