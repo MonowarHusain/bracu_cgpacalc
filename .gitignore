@@ -1,0 +1,10 @@
+# Local Env
+.env
+.vercel
+
+# Redundant config (if you kept it)
+js/config.js
+
+# OS files
+.DS_Store
+Thumbs.db
