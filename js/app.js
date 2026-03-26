@@ -1,5 +1,6 @@
 /**
  * BRACU CGPA Dash - Master Logic (Finalized for Vercel)
+ * Features: PDF Parser, Emerald History Highlighting, Nuclear Reset, Device Info Tracker
  */
 
 // --- 1. THE PDF PARSER ---
@@ -7,13 +8,16 @@ const parseBracuTranscript = (text) => {
     const courseMap = new Map();
     const semestersFound = [];
 
+    // Extract Student Name
     const nameMatch = text.match(/Name\s*[:\-]*\s*([A-Za-z\s\.]+?)\s*(?:BRAC\s+UNIVERSITY|Student ID|PROGRAM)/i);
     const studentName = nameMatch && nameMatch[1] ? nameMatch[1].trim() : "Student";
 
+    // Extract Semester Headers
     const semesterRegex = /SEMESTER:\s+([A-Z]+\s+\d{4})/gi;
     let semMatch;
     while ((semMatch = semesterRegex.exec(text)) !== null) semestersFound.push(semMatch[1].trim());
 
+    // Extract Course Data
     const courseRegex = /([A-Z]{2,3}\s?\d{3})\s+[\w\s&:-]+\s+(\d\.\d{2})\s+([A-F][+-]?(\s\(\w+\))?|I)/g;
     let currentMatch, lastSem = semestersFound[0] || "Unknown";
     while ((currentMatch = courseRegex.exec(text)) !== null) {
@@ -24,17 +28,31 @@ const parseBracuTranscript = (text) => {
         }) || lastSem;
         const cleanCode = (code || "").replace(/\s/g, ''), cleanGrade = (gradeInfo || "").trim();
         if (cleanGrade.includes('I') || cleanGrade.includes('(NT)')) continue;
-        courseMap.set(cleanCode, { code: cleanCode, credits: parseFloat(credits), grade: cleanGrade, semester: dSem, points: getPoints(cleanGrade) });
+        courseMap.set(cleanCode, { 
+            code: cleanCode, 
+            credits: parseFloat(credits), 
+            grade: cleanGrade, 
+            semester: dSem, 
+            points: getPoints(cleanGrade) 
+        });
     }
     const cgpaMatches = [...text.matchAll(/CGPA\s*([\d.]+)/gi)], creditMatches = [...text.matchAll(/Credits\s+Earned\s*([\d.]+)/gi)];
-    return { studentName, enrollment: semestersFound[0] || "Unknown", cgpa: parseFloat(cgpaMatches.pop()?.[1] || 0), credits: parseFloat(creditMatches.pop()?.[1] || 0), courses: Array.from(courseMap.values()), semesters: [...new Set(semestersFound)] };
+    return { 
+        studentName, 
+        enrollment: semestersFound[0] || "Unknown", 
+        cgpa: parseFloat(cgpaMatches.pop()?.[1] || 0), 
+        credits: parseFloat(creditMatches.pop()?.[1] || 0), 
+        courses: Array.from(courseMap.values()), 
+        semesters: [...new Set(semestersFound)] 
+    };
 };
 
-// --- 2. CONFIG & HELPERS ---
+// --- 2. HELPERS ---
 const KEY = 'bracu_dash_v12_pro';
 function getPoints(g) {
     if (!g) return 0;
-    return { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 }[g.split(' ')[0]] || 0;
+    const table = { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 };
+    return table[g.split(' ')[0]] || 0;
 }
 
 // --- 3. MAIN APP ---
@@ -50,7 +68,7 @@ window.addEventListener('DOMContentLoaded', () => {
         projCredits: document.getElementById('projectedCredits'),
         pdfInput: document.getElementById('pdfUpload'),
         addBtn: document.getElementById('addCourseBtn'),
-        resetFull: document.getElementById('resetFull'), // Correct ID
+        resetFull: document.getElementById('resetFull'),
         helpBtn: document.getElementById('helpBtn'),
         helpModal: document.getElementById('helpModal'),
         themeBtn: document.getElementById('themeToggle'),
@@ -100,7 +118,7 @@ window.addEventListener('DOMContentLoaded', () => {
             <div class="flex items-center gap-4 pt-5 border-t dark:border-slate-700">
                 <input type="checkbox" class="is-retake w-5 h-5 accent-blue-600" ${target ? 'checked' : ''}>
                 <span class="text-[11px] font-extrabold text-slate-500 uppercase tracking-tighter">RETAKE/REPEAT</span>
-                <select class="retake-target flex-1 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl py-4 px-4 text-[11px] font-bold ${target ? '' : 'hidden'}">
+                <select class="retake-target flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-4 px-4 text-[11px] font-bold ${target ? '' : 'hidden'}">
                     <option value="">Select Course...</option>
                     ${history.map(h => `<option value="${h.code}" ${target === h.code ? 'selected' : ''}>${(h.code || '')} (${(h.grade || '')}, ${(h.semester || '')})</option>`).join('')}
                 </select>
@@ -118,18 +136,22 @@ window.addEventListener('DOMContentLoaded', () => {
         const lastTwo = (semesters || []).slice(-2);
         els.historyBody.innerHTML = (courses || []).map(c => {
             const isRecent = lastTwo.includes(c.semester);
-            const cardStyle = isRecent ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-500/30" : "bg-white dark:bg-slate-800/40 border-slate-100 dark:border-slate-700/50";
-            const pillStyle = (c.grade || '').startsWith('A') ? "bg-emerald-500" : "bg-teal-500";
+            // COLORS: Emerald for last 2 semesters, Slate for others
+            const cardStyle = isRecent 
+                ? "bg-emerald-500/10 border-emerald-500/30" 
+                : "bg-slate-800/60 border-slate-700/50";
+            const pillStyle = isRecent ? "bg-emerald-500" : "bg-slate-700/50";
+            
             return `
                 <div class="p-6 rounded-[1.5rem] border flex justify-between items-center mb-5 shadow-sm ${cardStyle}">
                     <div class="space-y-1">
                         <div class="flex items-center gap-3">
-                            <span class="font-bold text-blue-500 text-sm tracking-tight">${c.code}</span>
-                            <span class="px-3 py-1 rounded-lg text-[10px] font-extrabold text-white ${pillStyle}">${c.grade} (${(c.points || 0).toFixed(2)})</span>
+                            <span class="font-bold text-blue-400 text-sm tracking-tight">${c.code}</span>
+                            <span class="px-3 py-1 rounded-lg text-[10px] font-black text-white ${pillStyle}">${c.grade} (${(c.points || 0).toFixed(2)})</span>
                         </div>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${c.semester}</p>
+                        <p class="text-[10px] font-bold text-slate-500 mt-2 uppercase tracking-widest">${c.semester}</p>
                     </div>
-                    <button class="p-2 text-slate-300 hover:text-red-500 transition-colors" onclick="window.delGrade('${c.code}')"><i class="fas fa-trash"></i></button>
+                    <button class="p-2 text-slate-400 hover:text-red-500 transition-colors" onclick="window.delGrade('${c.code}')"><i class="fas fa-trash"></i></button>
                 </div>`;
         }).join('');
     }
@@ -144,31 +166,18 @@ window.addEventListener('DOMContentLoaded', () => {
         renderHistory(s.history, s.semesters); calculate();
     };
 
-    // --- NUCLEAR RESET LOGIC ---
+    // --- NUCLEAR RESET ---
     els.resetFull.onclick = () => {
-        if (confirm("🚨 DANGER: This will delete your Name, Transcript History, and Planner. Are you sure?")) {
-            // 1. Clear Local Storage
+        if (confirm("🚨 DANGER: This will delete your Name, Transcript History, and Planner. Proceed?")) {
             localStorage.removeItem(KEY);
-
-            // 2. Explicitly wipe all UI values (Overcomes browser auto-fill)
-            els.name.value = "";
-            els.enrollment.value = "";
-            els.cgpa.value = "";
-            els.credits.value = "";
-            els.initial.innerText = "S";
-            els.container.innerHTML = "";
-            els.historyBody.innerHTML = "";
-            els.finalGpa.innerText = "0.00";
-            els.projCredits.innerText = "0";
-
-            // 3. Force reload to a clean state
+            els.name.value = ""; els.enrollment.value = ""; els.cgpa.value = ""; els.credits.value = "";
+            els.initial.innerText = "S"; els.container.innerHTML = ""; els.historyBody.innerHTML = "";
+            els.finalGpa.innerText = "0.00"; els.projCredits.innerText = "0";
             location.reload();
         }
     };
 
-    // --- OTHER ACTIONS ---
-    els.addBtn.onclick = () => { addCourseRow(); calculate(); };
-
+    // --- PDF IMPORT ---
     els.pdfInput.onchange = async (e) => {
         const f = e.target.files[0]; if (!f) return;
         const pdf = await pdfjsLib.getDocument(await f.arrayBuffer()).promise;
@@ -178,12 +187,28 @@ window.addEventListener('DOMContentLoaded', () => {
         location.reload();
     };
 
+    // --- FEEDBACK WITH DEVICE INFO ---
     document.getElementById('sendFeedback').onclick = async () => {
-        const body = { name: document.getElementById('fbName').value, email: document.getElementById('fbEmail').value, message: document.getElementById('fbMessage').value };
+        const deviceInfo = {
+            screen: `${window.screen.width}x${window.screen.height}`,
+            ua: navigator.userAgent,
+            lang: navigator.language,
+            plt: navigator.platform
+        };
+
+        const body = { 
+            name: document.getElementById('fbName').value, 
+            email: document.getElementById('fbEmail').value, 
+            message: document.getElementById('fbMessage').value,
+            device: deviceInfo
+        };
+
         const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (res.ok) { alert("Feedback Sent!"); document.getElementById('helpModal').classList.add('hidden'); }
+        else { alert("Error sending feedback."); }
     };
 
+    // --- UI LOGIC ---
     const switchTab = (i) => {
         [document.getElementById('contentGuide'), document.getElementById('contentFeedback')].forEach((c, idx) => c.classList.toggle('hidden', idx !== i));
         [document.getElementById('tabGuide'), document.getElementById('tabFeedback')].forEach((t, idx) => t.className = idx === i ? "flex-1 py-4 text-[10px] font-black uppercase border-b-2 border-blue-600 text-blue-600" : "flex-1 py-4 text-[10px] font-black uppercase border-b-2 border-transparent text-slate-400");
@@ -198,8 +223,9 @@ window.addEventListener('DOMContentLoaded', () => {
     els.openHistory.onclick = () => { document.getElementById('sidebarOverlay').classList.remove('hidden'); setTimeout(() => document.getElementById('historySidebar').classList.add('active'), 10); };
     els.closeHistory.onclick = () => { document.getElementById('historySidebar').classList.remove('active'); setTimeout(() => document.getElementById('sidebarOverlay').classList.add('hidden'), 300); };
     els.name.oninput = (e) => { els.initial.innerText = e.target.value.charAt(0).toUpperCase() || "S"; calculate(); };
+    els.addBtn.onclick = () => { addCourseRow(); calculate(); };
 
-    // Initial Load
+    // --- INITIAL LOAD ---
     if (localStorage.theme === 'light') document.documentElement.classList.remove('dark');
     const saved = JSON.parse(localStorage.getItem(KEY));
     if (saved) {
