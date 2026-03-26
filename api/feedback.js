@@ -7,7 +7,14 @@ export default async function handler(req, res) {
     try {
         const { name, email, message } = req.body;
         
-        // Force Bangladesh Time (UTC+6)
+        // 1. Extract IP Address from Vercel headers
+        const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || "Unknown";
+        
+        // 2. Get Location Data (Provided by Vercel)
+        const city = req.headers['x-vercel-ip-city'] || "Unknown City";
+        const country = req.headers['x-vercel-ip-country'] || "Unknown Country";
+
+        // 3. Force Bangladesh Time (UTC+6)
         const bstTime = new Date().toLocaleString("en-US", {
             timeZone: "Asia/Dhaka",
             dateStyle: "short",
@@ -21,9 +28,10 @@ export default async function handler(req, res) {
                 fields: [
                     { name: "Student Name", value: name || "Anonymous", inline: true },
                     { name: "Email", value: email || "Not provided", inline: true },
-                    { name: "Message", value: message }
+                    { name: "Message", value: message },
+                    { name: "Network Info", value: `**IP:** ${ip}\n**Location:** ${city}, ${country}`, inline: false }
                 ],
-                footer: { text: `Sent via CGPA Dash • ${bstTime}` } // Fixed Time
+                footer: { text: `Sent via CGPA Dash • ${bstTime}` }
             }]
         };
 
