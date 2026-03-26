@@ -1,23 +1,29 @@
-// api/feedback.js
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
 
-    const webhookUrl = process.env.DISCORD_WEBHOOK_URL; // Set this in Vercel Dashboard
-
+    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
     if (!webhookUrl) return res.status(500).json({ message: 'Webhook not configured' });
 
     try {
         const { name, email, message } = req.body;
+        
+        // Force Bangladesh Time (UTC+6)
+        const bstTime = new Date().toLocaleString("en-US", {
+            timeZone: "Asia/Dhaka",
+            dateStyle: "short",
+            timeStyle: "medium"
+        });
+
         const payload = {
             embeds: [{
                 title: "🚀 New Feedback Received",
-                color: 3447003, // BRACU Blue
+                color: 3447003,
                 fields: [
                     { name: "Student Name", value: name || "Anonymous", inline: true },
                     { name: "Email", value: email || "Not provided", inline: true },
                     { name: "Message", value: message }
                 ],
-                footer: { text: `Sent via CGPA Dash • ${new Date().toLocaleString()}` }
+                footer: { text: `Sent via CGPA Dash • ${bstTime}` } // Fixed Time
             }]
         };
 
