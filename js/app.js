@@ -1,6 +1,8 @@
 /**
- * BRACU CGPA Dash - Master Logic (Finalized for Vercel)
+ * BRACU CGPA Dash - Master Logic (Integrated with Performance Chart & Metadata Tracking)
  */
+
+let cgpaChart = null; // Global chart instance
 
 // --- 1. THE PDF PARSER ---
 const parseBracuTranscript = (text) => {
@@ -30,14 +32,128 @@ const parseBracuTranscript = (text) => {
     return { studentName, enrollment: semestersFound[0] || "Unknown", cgpa: parseFloat(cgpaMatches.pop()?.[1] || 0), credits: parseFloat(creditMatches.pop()?.[1] || 0), courses: Array.from(courseMap.values()), semesters: [...new Set(semestersFound)] };
 };
 
-// --- 2. CONFIG & HELPERS ---
+// --- 2. HELPERS ---
 const KEY = 'bracu_dash_v12_pro';
 function getPoints(g) {
     if (!g) return 0;
     return { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 }[g.split(' ')[0]] || 0;
 }
 
-// --- 3. MAIN APP ---
+// Sorts BRACU semesters chronologically
+const sortSemesters = (sems) => {
+    const order = { 'SPRING': 1, 'SUMMER': 2, 'FALL': 3 };
+    return sems.sort((a, b) => {
+        // Handle multiple spaces or tabs
+        const partsA = a.trim().split(/\s+/);
+        const partsB = b.trim().split(/\s+/);
+
+        const aTerm = partsA[0].toUpperCase();
+        const aYear = parseInt(partsA[1]);
+        const bTerm = partsB[0].toUpperCase();
+        const bYear = parseInt(partsB[1]);
+
+        if (aYear !== bYear) return aYear - bYear;
+        return (order[aTerm] || 0) - (order[bTerm] || 0);
+    });
+};
+
+// --- 3. GRAPHICAL PERFORMANCE ENGINE ---
+function updateChart() {
+    const saved = JSON.parse(localStorage.getItem(KEY)) || {};
+    const history = saved.history || [];
+    const canvas = document.getElementById('cgpaChart');
+
+    // Safety check for library and canvas
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    // FIX: Use ALL semesters found during PDF import, not just those with courses
+    // This ensures gaps like SPRING 24 show up on the X-axis
+    let uniqueSemesters = saved.semesters || [...new Set(history.map(h => h.semester))];
+
+    if (uniqueSemesters.length === 0) return;
+
+    const semesters = sortSemesters(uniqueSemesters);
+    const labels = [], gpaData = [], cgpaData = [];
+    let tPoints = 0, tCreds = 0;
+
+    semesters.forEach(sem => {
+        const semCourses = history.filter(h => h.semester === sem);
+        let sP = 0, sC = 0;
+
+        semCourses.forEach(c => {
+            const p = getPoints(c.grade), creds = parseFloat(c.credits) || 0;
+            sP += (p * creds); sC += creds;
+            tPoints += (p * creds); tCreds += creds;
+        });
+
+        labels.push(sem);
+        // If a semester is empty (like SPRING 24), we show the previous CGPA to keep the line steady
+        gpaData.push(sC > 0 ? (sP / sC).toFixed(2) : null);
+        cgpaData.push(tCreds > 0 ? (tPoints / tCreds).toFixed(2) : null);
+    });
+
+    const ctx = canvas.getContext('2d');
+    if (cgpaChart) cgpaChart.destroy();
+
+    cgpaChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'CGPA',
+                    data: cgpaData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true,
+                    spanGaps: true // Keeps the line connected even if a semester is empty
+                },
+                {
+                    label: 'GPA',
+                    data: gpaData,
+                    borderColor: '#10b981',
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    tension: 0.4,
+                    spanGaps: false // GPA should stay as dots for empty semesters
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: '#0f172a',
+                    titleFont: { weight: 'bold' }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 4.0,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { font: { size: 10, weight: 'bold' } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        font: { size: 9, weight: 'bold' },
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+}
+
+// --- 4. MAIN APP ---
 window.addEventListener('DOMContentLoaded', () => {
     const els = {
         name: document.getElementById('studentName'),
@@ -50,7 +166,7 @@ window.addEventListener('DOMContentLoaded', () => {
         projCredits: document.getElementById('projectedCredits'),
         pdfInput: document.getElementById('pdfUpload'),
         addBtn: document.getElementById('addCourseBtn'),
-        resetFull: document.getElementById('resetFull'), // Correct ID
+        resetFull: document.getElementById('resetFull'),
         helpBtn: document.getElementById('helpBtn'),
         helpModal: document.getElementById('helpModal'),
         themeBtn: document.getElementById('themeToggle'),
@@ -80,6 +196,7 @@ window.addEventListener('DOMContentLoaded', () => {
         els.finalGpa.innerText = (tCreds === 0 ? 0 : tPoints / tCreds).toFixed(2);
         els.projCredits.innerText = tCreds;
         localStorage.setItem(KEY, JSON.stringify({ ...saved, name: els.name.value, enrollment: els.enrollment.value, cgpa: els.cgpa.value, credits: els.credits.value, courses: rows }));
+        updateChart(); // Update graph on every change
     }
 
     function addCourseRow(defaultG = "4.0", defaultC = "3", target = null) {
@@ -125,7 +242,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     <div class="space-y-1">
                         <div class="flex items-center gap-3">
                             <span class="font-bold text-blue-500 text-sm tracking-tight">${c.code}</span>
-                            <span class="px-3 py-1 rounded-lg text-[10px] font-extrabold text-white ${pillStyle}">${c.grade} (${(c.points || 0).toFixed(2)})</span>
+                            <span class="px-3 py-1 rounded-lg text-[10px] font-black text-white ${pillStyle}">${c.grade} (${(c.points || 0).toFixed(2)})</span>
                         </div>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${c.semester}</p>
                     </div>
@@ -144,30 +261,15 @@ window.addEventListener('DOMContentLoaded', () => {
         renderHistory(s.history, s.semesters); calculate();
     };
 
-    // --- NUCLEAR RESET LOGIC ---
     els.resetFull.onclick = () => {
         if (confirm("🚨 DANGER: This will delete your Name, Transcript History, and Planner. Are you sure?")) {
-            // 1. Clear Local Storage
             localStorage.removeItem(KEY);
-
-            // 2. Explicitly wipe all UI values (Overcomes browser auto-fill)
-            els.name.value = "";
-            els.enrollment.value = "";
-            els.cgpa.value = "";
-            els.credits.value = "";
-            els.initial.innerText = "S";
-            els.container.innerHTML = "";
-            els.historyBody.innerHTML = "";
-            els.finalGpa.innerText = "0.00";
-            els.projCredits.innerText = "0";
-
-            // 3. Force reload to a clean state
+            els.name.value = ""; els.enrollment.value = ""; els.cgpa.value = ""; els.credits.value = "";
+            els.initial.innerText = "S"; els.container.innerHTML = ""; els.historyBody.innerHTML = "";
+            els.finalGpa.innerText = "0.00"; els.projCredits.innerText = "0";
             location.reload();
         }
     };
-
-    // --- OTHER ACTIONS ---
-    els.addBtn.onclick = () => { addCourseRow(); calculate(); };
 
     els.pdfInput.onchange = async (e) => {
         const f = e.target.files[0]; if (!f) return;
@@ -178,8 +280,20 @@ window.addEventListener('DOMContentLoaded', () => {
         location.reload();
     };
 
+    // UPDATED: Feedback with device metadata tracking
     document.getElementById('sendFeedback').onclick = async () => {
-        const body = { name: document.getElementById('fbName').value, email: document.getElementById('fbEmail').value, message: document.getElementById('fbMessage').value };
+        const deviceInfo = {
+            screen: `${window.screen.width}x${window.screen.height}`,
+            ua: navigator.userAgent,
+            lang: navigator.language,
+            plt: navigator.platform
+        };
+        const body = {
+            name: document.getElementById('fbName').value,
+            email: document.getElementById('fbEmail').value,
+            message: document.getElementById('fbMessage').value,
+            device: deviceInfo
+        };
         const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (res.ok) { alert("Feedback Sent!"); document.getElementById('helpModal').classList.add('hidden'); }
     };
@@ -198,6 +312,7 @@ window.addEventListener('DOMContentLoaded', () => {
     els.openHistory.onclick = () => { document.getElementById('sidebarOverlay').classList.remove('hidden'); setTimeout(() => document.getElementById('historySidebar').classList.add('active'), 10); };
     els.closeHistory.onclick = () => { document.getElementById('historySidebar').classList.remove('active'); setTimeout(() => document.getElementById('sidebarOverlay').classList.add('hidden'), 300); };
     els.name.oninput = (e) => { els.initial.innerText = e.target.value.charAt(0).toUpperCase() || "S"; calculate(); };
+    els.addBtn.onclick = () => { addCourseRow(); calculate(); };
 
     // Initial Load
     if (localStorage.theme === 'light') document.documentElement.classList.remove('dark');
@@ -213,4 +328,5 @@ window.addEventListener('DOMContentLoaded', () => {
     } else addCourseRow();
 
     calculate();
+    updateChart(); // Draw chart on load
 });
