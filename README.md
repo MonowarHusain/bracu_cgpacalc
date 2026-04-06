@@ -1,45 +1,68 @@
-# BRACU CGPA Calculator
+# CGPACalc.pro | BRACU Student Toolkit (v2.0)
 
-The BRACU CGPA Calculator is a web application designed to assist BRAC University students in calculating their Cumulative Grade Point Average (CGPA) based on completed and ongoing courses. This tool provides a user-friendly interface for managing academic progress efficiently.
+**CGPACalc.pro** is an advanced, privacy-first web suite designed specifically for BRAC University students. It transforms the unofficial USIS transcript PDF into an interactive dashboard for degree auditing and CGPA planning.
 
-## Features
+![Version](https://img.shields.io/badge/version-2.0--toolkit-blue?style=for-the-badge)
+![Privacy](https://img.shields.io/badge/Data_Privacy-100%25_Local-emerald?style=for-the-badge)
 
-- **Current CGPA Input:** Users can input their current CGPA.
-- **Completed Courses:** Input field for the number of courses already completed.
-- **Courses Enrolled this Semester:** Allows users to specify the number of courses they are currently enrolled in.
-- **Grade Selection:** Dynamically generates dropdowns for selecting grades for each enrolled course.
-- **CGPA Calculation:** Automatically calculates the CGPA based on user inputs.
-- **Error Handling:** Validates inputs and provides alerts for invalid entries or critical thresholds (e.g., CGPA exceeding 4.00 or enrolling in less than 3 courses).
-- **Interactive Interface:** Provides real-time CGPA feedback without page reloads.
-- **Styling:** Responsive design with CSS, including animations and social media links.
+---
 
-## Technologies Used
+## 🚀 Key Features
 
-- **HTML, CSS:** Structured the layout and styled the application.
-- **JavaScript:** Implemented client-side functionality for dynamic calculations and user interaction.
-- **Font Awesome:** Integrated for social media icons.
+### 1. Multi-Page Architecture
+* **Gateway Launchpad:** A centralized landing page to choose between high-level analytics or granular semester planning.
+* **User Manual:** Integrated guide explaining data security, official BRACU rules, and tool usage.
+* **Seamless Routing:** Fast, Single-Page Application (SPA) experience for instant switching between tools without page reloads.
 
-## Usage
+### 2. Degree Analytics & Auditor
+* **Auto-Program Detection:** Automatically identifies if you are in the **CSE (136 Cr)**, **CS (124 Cr)**, or **M.Sc (36 Cr)** track.
+* **University Core Breakdown:** Maps your GenEd courses into the 5 official BRACU streams (Writing, Math/Science, Humanities, Social Sciences, Communities) with specific sub-headers.
+* **Official Trend Graph:** A dynamic Chart.js visualization using official USIS data. 
+    * 🟢 **Green Segments:** Performance improvement or stable trend.
+    * 🔴 **Red Segments:** Performance decrease from the previous semester.
 
-1. **Input Section:**
-   - Enter your current CGPA, number of completed courses, and courses enrolled this semester.
-   - Select grades for each enrolled course from the dropdowns provided.
+### 3. CGPA Predictor (Fresher Friendly)
+* **Fresher Bypass:** Start planning from Semester 1 without needing an existing transcript.
+* **Dynamic Retake Logic:** Select old courses from a dynamic dropdown; the engine automatically handles credit replacement math (perfect for replacing 'F' or 'D' grades).
+* **History Editor:** Manually remove or adjust previous courses to see how your "Base CGPA" changes in real-time.
+* **Active Semester Highlight:** Visual indicators (Emerald glow) for the most recent semester's performance.
 
-2. **Calculation:**
-   - Click on "Calculate CGPA" to see the computed CGPA based on your inputs.
-   - If applicable, review alerts regarding CGPA status and course load thresholds.
+---
 
-3. **Developer Information:**
-   - Explore social media links and developer details provided in the application.
+## 🛡️ Privacy & Security
+**Your data is yours.**
+* **Zero Server Uploads:** PDF parsing is done entirely in the browser using `PDF.js`.
+* **Local Storage:** Data is saved in your browser's local cache. 
+* **Developer Transparency:** Data stays strictly on your device. Nothing is sent to the developer.
 
-## Installation
+---
 
-No installation is required to use the BRACU CGPA Calculator. Simply access the application through a web browser with an internet connection.
+## 📖 How to Use
+1.  **Launch:** Open the app via the gateway page.
+2.  **Import:** Upload your **Unofficial Transcript PDF** from USIS.
+    * *Alternative:* Use the **"Paste Raw Text"** side-door if your browser blocks direct PDF uploads.
+3.  **Audit:** Check the "Detailed Audit" tab to see exactly which GenEd streams you are missing.
+4.  **Plan:** Go to the Predictor to simulate your next semester's grades and see your projected CGPA.
 
-## Contributing
+---
 
-Contributions are welcome! Fork the repository, make your changes, and submit a pull request. For major changes, please open an issue first to discuss potential improvements.
+## 🛠️ Tech Stack
+* **Frontend:** Tailwind CSS (Modern Styling), FontAwesome (Icons)
+* **Charts:** Chart.js (Official Performance Visuals)
+* **Parsing:** PDF.js (Local PDF Extraction)
+* **Redundancy:** Integrated Domain Fallback (monowar.me / mono.pro.bd / monowar.pro.bd)
 
-## Acknowledgments
+---
 
-Special thanks to [Istiak Al Imran](https://www.linkedin.com/in/istiak-al-imran-55490b232/) for valuable assistance during my project journey.
+## 👤 Developer
+**Monowar Husain Omi** 🔗 [monowar.me](https://monowar.me) | [mono.bro.bd](https://mono.bro.bd) | [monowar.pro.bd](https://monowar.pro.bd)
+
+---
+
+### 📝 Release Notes (v2.0)
+* Implemented Multi-Page routing system (Gateway -> Apps).
+* Added "History Editor" to the Predictor for granular course management.
+* Implemented dynamic retake course selection via dropdown.
+* Added User Manual and Feedback Modal (Discord integration) to the Launch Page.
+* Restored Official Graph with official USIS data and Red/Green trend detection.
+* Grouped Auditor categories under "University Core (39 Credits)".
