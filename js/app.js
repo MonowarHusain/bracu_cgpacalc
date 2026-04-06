@@ -1,332 +1,335 @@
 /**
- * BRACU CGPA Dash - Master Logic (Integrated with Performance Chart & Metadata Tracking)
+ * CGPA Calc Pro - Master Engine
  */
 
-let cgpaChart = null; // Global chart instance
+const KEY = 'cgpapro_user_data';
+let cgpaChart = null;
 
-// --- 1. THE PDF PARSER ---
-const parseBracuTranscript = (text) => {
-    const courseMap = new Map();
-    const semestersFound = [];
-
-    const nameMatch = text.match(/Name\s*[:\-]*\s*([A-Za-z\s\.]+?)\s*(?:BRAC\s+UNIVERSITY|Student ID|PROGRAM)/i);
-    const studentName = nameMatch && nameMatch[1] ? nameMatch[1].trim() : "Student";
-
-    const semesterRegex = /SEMESTER:\s+([A-Z]+\s+\d{4})/gi;
-    let semMatch;
-    while ((semMatch = semesterRegex.exec(text)) !== null) semestersFound.push(semMatch[1].trim());
-
-    const courseRegex = /([A-Z]{2,3}\s?\d{3})\s+[\w\s&:-]+\s+(\d\.\d{2})\s+([A-F][+-]?(\s\(\w+\))?|I)/g;
-    let currentMatch, lastSem = semestersFound[0] || "Unknown";
-    while ((currentMatch = courseRegex.exec(text)) !== null) {
-        const [_, code, credits, gradeInfo] = currentMatch;
-        let dSem = semestersFound.find((s, i) => {
-            const start = text.indexOf(s), end = semestersFound[i + 1] ? text.indexOf(semestersFound[i + 1]) : text.length;
-            return currentMatch.index >= start && currentMatch.index < end;
-        }) || lastSem;
-        const cleanCode = (code || "").replace(/\s/g, ''), cleanGrade = (gradeInfo || "").trim();
-        if (cleanGrade.includes('I') || cleanGrade.includes('(NT)')) continue;
-        courseMap.set(cleanCode, { code: cleanCode, credits: parseFloat(credits), grade: cleanGrade, semester: dSem, points: getPoints(cleanGrade) });
-    }
-    const cgpaMatches = [...text.matchAll(/CGPA\s*([\d.]+)/gi)], creditMatches = [...text.matchAll(/Credits\s+Earned\s*([\d.]+)/gi)];
-    return { studentName, enrollment: semestersFound[0] || "Unknown", cgpa: parseFloat(cgpaMatches.pop()?.[1] || 0), credits: parseFloat(creditMatches.pop()?.[1] || 0), courses: Array.from(courseMap.values()), semesters: [...new Set(semestersFound)] };
+// --- UTILS ---
+const getPoints = (g) => {
+    const table = { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 };
+    return table[(g || '').split(' ')[0].toUpperCase()] || 0;
 };
 
-// --- 2. HELPERS ---
-const KEY = 'bracu_dash_v12_pro';
-function getPoints(g) {
-    if (!g) return 0;
-    return { 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7, 'C+': 2.3, 'C': 2.0, 'D+': 1.7, 'D': 1.3, 'D-': 1.0, 'F': 0.0 }[g.split(' ')[0]] || 0;
-}
+// --- ROBUST TRANSCRIPT PARSER ---
+const parseTranscript = (text) => {
+    const history = [], semestersFound = [], transcriptHistory = [];
 
-// Sorts BRACU semesters chronologically
-const sortSemesters = (sems) => {
-    const order = { 'SPRING': 1, 'SUMMER': 2, 'FALL': 3 };
-    return sems.sort((a, b) => {
-        // Handle multiple spaces or tabs
-        const partsA = a.trim().split(/\s+/);
-        const partsB = b.trim().split(/\s+/);
+    // 1. Identify Name & Totals
+    const nameMatch = text.match(/Name\s*[:\-]*\s*([A-Za-z\s\.]+?)\s*(?:BRAC|Student ID|PROGRAM)/i);
+    const finalCgpaMatch = [...text.matchAll(/CGPA\s*[:\-]*\s*([\d.]+)/gi)].pop();
+    const finalCreditsMatch = [...text.matchAll(/Credits\s+(?:Earned|Completed)\s*[:\-]*\s*([\d.]+)/gi)].pop();
 
-        const aTerm = partsA[0].toUpperCase();
-        const aYear = parseInt(partsA[1]);
-        const bTerm = partsB[0].toUpperCase();
-        const bYear = parseInt(partsB[1]);
+    // 2. Auto-Detect Degree [cite: 57-58, 137-140]
+    let detectedPlan = "CSE";
+    if (/MASTER/i.test(text)) detectedPlan = "MSC";
+    else if (/COMPUTER SCIENCE\s*AND\s*ENGINEERING/i.test(text)) detectedPlan = "CSE";
+    else if (/COMPUTER SCIENCE/i.test(text)) detectedPlan = "CS";
 
-        if (aYear !== bYear) return aYear - bYear;
-        return (order[aTerm] || 0) - (order[bTerm] || 0);
-    });
-};
+    // 3. Extract Semesters
+    const semRegex = /(?:SEMESTER|Semester)\s*[:\-]*\s*([A-Z]+\s+\d{4})/gi;
+    let m; while ((m = semRegex.exec(text)) !== null) semestersFound.push(m[1].trim());
 
-// --- 3. GRAPHICAL PERFORMANCE ENGINE ---
-function updateChart() {
-    const saved = JSON.parse(localStorage.getItem(KEY)) || {};
-    const history = saved.history || [];
-    const canvas = document.getElementById('cgpaChart');
+    // 4. Extract Courses (Loosened regex for better matching)
+    const courseRegex = /([A-Z]{2,4}\s*\d{3})\s+([\w\s&:\-\(\)\/\.,]+?)\s+(\d(?:\.\d+)?)\s+([A-F][+-]?|I|W|P|S|U)/g;
+    let c; while ((c = courseRegex.exec(text)) !== null) {
+        if (['I', 'W', 'P', 'S', 'U'].includes(c[4].trim())) continue;
 
-    // Safety check for library and canvas
-    if (!canvas || typeof Chart === 'undefined') return;
+        let currentSem = semestersFound[0] || "Unknown";
+        for (let i = 0; i < semestersFound.length; i++) {
+            if (c.index > text.indexOf(semestersFound[i])) currentSem = semestersFound[i];
+        }
 
-    // FIX: Use ALL semesters found during PDF import, not just those with courses
-    // This ensures gaps like SPRING 24 show up on the X-axis
-    let uniqueSemesters = saved.semesters || [...new Set(history.map(h => h.semester))];
+        const code = c[1].replace(/\s/g, '');
+        const existingIdx = history.findIndex(h => h.code === code);
+        if (existingIdx !== -1) history.splice(existingIdx, 1);
 
-    if (uniqueSemesters.length === 0) return;
-
-    const semesters = sortSemesters(uniqueSemesters);
-    const labels = [], gpaData = [], cgpaData = [];
-    let tPoints = 0, tCreds = 0;
-
-    semesters.forEach(sem => {
-        const semCourses = history.filter(h => h.semester === sem);
-        let sP = 0, sC = 0;
-
-        semCourses.forEach(c => {
-            const p = getPoints(c.grade), creds = parseFloat(c.credits) || 0;
-            sP += (p * creds); sC += creds;
-            tPoints += (p * creds); tCreds += creds;
+        history.push({
+            code,
+            credits: parseFloat(c[3]),
+            grade: c[4].trim(),
+            semester: currentSem,
+            points: getPoints(c[4].trim())
         });
+    }
 
-        labels.push(sem);
-        // If a semester is empty (like SPRING 24), we show the previous CGPA to keep the line steady
-        gpaData.push(sC > 0 ? (sP / sC).toFixed(2) : null);
-        cgpaData.push(tCreds > 0 ? (tPoints / tCreds).toFixed(2) : null);
+    // 5. Extract Historic CGPA
+    semestersFound.forEach(sem => {
+        const start = text.indexOf(sem), nextSem = semestersFound[semestersFound.indexOf(sem) + 1];
+        const cgpaMatch = text.substring(start, nextSem ? text.indexOf(nextSem) : text.length).match(/CGPA\s*[:\-]*\s*([\d.]+)/i);
+        if (cgpaMatch) transcriptHistory.push({ semester: sem, cgpa: parseFloat(cgpaMatch[1]) });
     });
 
-    const ctx = canvas.getContext('2d');
-    if (cgpaChart) cgpaChart.destroy();
+    return {
+        studentName: (nameMatch ? nameMatch[1].trim() : "Student").replace(/PROGRAM/i, ''),
+        history, transcriptHistory, semesters: [...new Set(semestersFound)],
+        officialCgpa: parseFloat(finalCgpaMatch?.[1] || 0),
+        officialCredits: parseFloat(finalCreditsMatch?.[1] || 0),
+        plan: detectedPlan
+    };
+};
 
-    cgpaChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'CGPA',
-                    data: cgpaData,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    borderWidth: 3,
-                    tension: 0.4,
-                    fill: true,
-                    spanGaps: true // Keeps the line connected even if a semester is empty
-                },
-                {
-                    label: 'GPA',
-                    data: gpaData,
-                    borderColor: '#10b981',
-                    borderDash: [5, 5],
-                    borderWidth: 2,
-                    tension: 0.4,
-                    spanGaps: false // GPA should stay as dots for empty semesters
+// --- AUDIT RENDERER ---
+// --- AUDIT RENDERER (THE OVERFLOW ENGINE) ---
+function renderDetailedAudit(user) {
+    if (!user || !user.history) return;
+    const plan = DEGREE_DATA[user.plan];
+    if (!plan) return;
+
+    let auditHtml = '';
+    let usedCodes = new Set();
+    let genEdOverflow = []; // Holds extra Stream courses (e.g., ENG103)
+
+    // PASS 1: Strict Cores, Streams, and Remedial
+    Object.entries(plan.categories).forEach(([catName, rules]) => {
+        if (catName === "GenEd Electives" || rules.isElective) return;
+
+        let completed = [], remaining = [];
+        let currentCredits = 0;
+
+        // 1A. Handle Remedial (0 credits)
+        if (rules.isRemedial) {
+            user.history.forEach(c => {
+                if (!usedCodes.has(c.code) && rules.codes.includes(c.code)) {
+                    completed.push(c); usedCodes.add(c.code);
                 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    backgroundColor: '#0f172a',
-                    titleFont: { weight: 'bold' }
+            });
+            plan.categories[catName]._tempCompleted = completed;
+            plan.categories[catName]._tempRemaining = [];
+            return;
+        }
+
+        // 1B. Handle Mandatory Targets (e.g., EMB101/DEV101)
+        if (rules.mandatory) {
+            rules.mandatory.forEach(mandCode => {
+                let found = false;
+                const options = mandCode.split('/'); // Split 'EMB101/DEV101'
+                for (let opt of options) {
+                    let c = user.history.find(x => x.code === opt);
+                    if (c && !usedCodes.has(c.code)) {
+                        if (currentCredits < rules.req) {
+                            completed.push(c); usedCodes.add(c.code); currentCredits += c.credits;
+                        } else {
+                            genEdOverflow.push(c); usedCodes.add(c.code); // Overflow!
+                        }
+                        found = true;
+                        break;
+                    }
                 }
-            },
-            scales: {
-                y: {
-                    min: 0,
-                    max: 4.0,
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { font: { size: 10, weight: 'bold' } }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: {
-                        font: { size: 9, weight: 'bold' },
-                        maxRotation: 45,
-                        minRotation: 45
+                if (!found) remaining.push(mandCode);
+            });
+        }
+
+        // 1C. Fill with Options (Codes array or Matcher)
+        user.history.forEach(c => {
+            if (!usedCodes.has(c.code)) {
+                if ((rules.codes && rules.codes.includes(c.code)) || (rules.matcher && rules.matcher(c.code))) {
+                    if (currentCredits < rules.req) {
+                        completed.push(c); usedCodes.add(c.code); currentCredits += c.credits;
+                    } else if (catName.includes("Stream")) {
+                        genEdOverflow.push(c); usedCodes.add(c.code); // Overflow!
                     }
                 }
             }
+        });
+
+        // Add standard remaining codes if not mandatory-driven
+        if (rules.codes && !rules.mandatory) {
+            rules.codes.forEach(code => {
+                if (!completed.find(c => c.code === code)) remaining.push(code);
+            });
         }
+
+        plan.categories[catName]._tempCompleted = completed;
+        plan.categories[catName]._tempRemaining = remaining;
+    });
+
+    // PASS 2: GenEd Electives (Grabs BIO/CHE/ENV + Overflow)
+    let genEdCat = plan.categories["GenEd Electives"];
+    if (genEdCat) {
+        let completed = [], currentCredits = 0;
+
+        // Grab explicit GenEd courses
+        user.history.forEach(c => {
+            if (!usedCodes.has(c.code) && genEdCat.matcher && genEdCat.matcher(c.code)) {
+                if (currentCredits < genEdCat.req) {
+                    completed.push(c); usedCodes.add(c.code); currentCredits += c.credits;
+                }
+            }
+        });
+
+        // Consume overflow from Streams
+        genEdOverflow.forEach(c => {
+            if (currentCredits < genEdCat.req) {
+                completed.push(c); currentCredits += c.credits;
+            }
+        });
+
+        genEdCat._tempCompleted = completed;
+        genEdCat._tempRemaining = [];
+    }
+
+    // PASS 3: Program Electives (Crossover Logic)
+    Object.entries(plan.categories).forEach(([catName, rules]) => {
+        if (!rules.isElective) return;
+
+        let completed = [];
+        user.history.forEach(course => {
+            if (!usedCodes.has(course.code) && (!rules.matcher || rules.matcher(course.code))) {
+                completed.push(course); usedCodes.add(course.code);
+            }
+        });
+        plan.categories[catName]._tempCompleted = completed;
+        plan.categories[catName]._tempRemaining = [];
+    });
+
+    // PASS 4: Generate HTML Cards
+    Object.entries(plan.categories).forEach(([catName, rules]) => {
+        const completed = rules._tempCompleted;
+        const remaining = rules._tempRemaining;
+        const totalEarned = completed.reduce((sum, c) => sum + c.credits, 0);
+
+        // Handle Remedial display logic (always shows 100% full, but 0/0 credits)
+        const displayReq = rules.isRemedial ? 0 : rules.req;
+        const progressPercent = displayReq === 0 ? 100 : Math.min((totalEarned / displayReq) * 100, 100);
+
+        auditHtml += `
+            <div class="bg-slate-900/50 border border-slate-800 rounded-[2rem] overflow-hidden">
+                <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                    <div>
+                        <h3 class="text-white font-black uppercase tracking-widest text-sm">${catName}</h3>
+                        <p class="text-slate-500 text-xs mt-1">${totalEarned} / ${displayReq} Credits Met</p>
+                    </div>
+                    <span class="text-2xl font-black ${progressPercent >= 100 ? 'text-emerald-500' : 'text-blue-500'}">${Math.round(progressPercent)}%</span>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-3"><i class="fas fa-check-circle mr-2"></i> Completed</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${completed.length > 0 ? completed.map(c => `<span class="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded-md text-[10px] font-bold">${c.code} (${c.grade})</span>`).join('') : '<p class="text-slate-600 italic text-xs">None yet.</p>'}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-3"><i class="fas fa-exclamation-triangle mr-2"></i> Remaining</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${remaining.length > 0 ? remaining.map(code => `<span class="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded-md text-[10px] font-bold">${code}</span>`).join('') : (rules.isElective || rules.isRemedial ? `<p class="text-slate-500 text-xs">${rules.isRemedial ? 'No requirements.' : 'Take electives to fill gap.'}</p>` : '<p class="text-emerald-500 text-xs font-bold">Category Complete!</p>')}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    });
+    document.getElementById('auditList').innerHTML = auditHtml;
+}
+
+// --- GREEN HISTORY RENDERER ---
+function renderHistory(history, semesters) {
+    const body = document.getElementById('historyTable');
+    if (!semesters || semesters.length === 0) return;
+
+    const recentSems = semesters.slice(-2); // Last 2 sems are green
+
+    let html = "";
+    [...semesters].reverse().forEach(sem => {
+        const isGreen = recentSems.includes(sem);
+        const semCourses = history.filter(h => h.semester === sem);
+
+        html += `
+            <div class="p-6 rounded-[2rem] border ${isGreen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-800 bg-slate-900/50'}">
+                <h4 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${isGreen ? 'text-emerald-500' : 'text-slate-500'}">
+                    ${sem} ${isGreen ? '• ACTIVE' : ''}
+                </h4>
+                <div class="space-y-2">
+                    ${semCourses.map(c => `
+                        <div class="flex justify-between items-center border-b border-slate-800/50 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
+                            <div>
+                                <p class="font-bold text-xs ${isGreen ? 'text-emerald-400' : 'text-white'}">${c.code}</p>
+                                <p class="text-[8px] text-slate-500 uppercase">${c.credits} Credits</p>
+                            </div>
+                            <span class="font-black text-xs ${isGreen ? 'text-emerald-500' : 'text-slate-400'}">${c.grade}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+    });
+    body.innerHTML = html;
+}
+
+// --- UI SYNC ---
+function refreshUI(user) {
+    if (!user) return;
+    const plan = DEGREE_DATA[user.plan] || DEGREE_DATA.CSE;
+
+    document.getElementById('studentNameDisplay').innerText = user.studentName;
+    document.getElementById('nameInitial').innerText = user.studentName[0];
+    document.getElementById('navUserPlan').innerText = `${user.plan} Track (${plan.total} Credits) Auto-Detected`;
+    document.getElementById('systemStatus').innerHTML = `<span class="text-emerald-500 font-bold"><i class="fas fa-check-circle"></i> Sync Successful!</span> Loaded ${user.history.length} courses for ${user.plan} program.`;
+
+    const cgpa = user.officialCgpa || 0;
+    const completed = user.officialCredits || 0;
+    document.getElementById('finalGPA').innerText = cgpa.toFixed(2);
+    document.getElementById('progressText').innerText = `${completed} / ${plan.total} Credits`;
+
+    document.getElementById('degreeProgressBar').style.width = `${Math.min((completed / plan.total) * 100, 100)}%`;
+
+    const badge = document.getElementById('waiverBadgeDetail');
+    if (cgpa >= 3.9) { badge.className = "px-4 py-2 rounded-full text-xs font-black bg-emerald-500 text-white"; badge.innerText = "100% WAIVER"; }
+    else if (cgpa >= 3.85) { badge.className = "px-4 py-2 rounded-full text-xs font-black bg-blue-500 text-white"; badge.innerText = "75% WAIVER"; }
+    else { badge.className = "px-4 py-2 rounded-full text-xs font-black bg-slate-800 text-slate-500"; badge.innerText = "NO WAIVER"; }
+
+    renderDetailedAudit(user);
+    renderHistory(user.history, user.semesters);
+
+    const canvas = document.getElementById('cgpaChart');
+    if (cgpaChart) cgpaChart.destroy();
+    cgpaChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: (user.transcriptHistory || []).map(th => th.semester),
+            datasets: [{ label: 'CGPA', data: (user.transcriptHistory || []).map(th => th.cgpa), borderColor: '#3b82f6', tension: 0.4, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 2.0, max: 4.0 } } }
     });
 }
 
-// --- 4. MAIN APP ---
+// --- INIT ---
 window.addEventListener('DOMContentLoaded', () => {
-    const els = {
-        name: document.getElementById('studentName'),
-        initial: document.getElementById('nameInitial'),
-        enrollment: document.getElementById('enrollmentSem'),
-        cgpa: document.getElementById('currentCGPA'),
-        credits: document.getElementById('completedCredits'),
-        container: document.getElementById('courseInputs'),
-        finalGpa: document.getElementById('finalGPA'),
-        projCredits: document.getElementById('projectedCredits'),
-        pdfInput: document.getElementById('pdfUpload'),
-        addBtn: document.getElementById('addCourseBtn'),
-        resetFull: document.getElementById('resetFull'),
-        helpBtn: document.getElementById('helpBtn'),
-        helpModal: document.getElementById('helpModal'),
-        themeBtn: document.getElementById('themeToggle'),
-        openHistory: document.getElementById('openHistory'),
-        closeHistory: document.getElementById('closeHistory'),
-        historyBody: document.getElementById('historyBody')
-    };
+    let user = JSON.parse(localStorage.getItem(KEY));
+    if (user && user.history && user.history.length > 0) refreshUI(user);
 
-    function calculate() {
-        const curCGPA = parseFloat(els.cgpa.value) || 0, curCreds = parseFloat(els.credits.value) || 0;
-        const saved = JSON.parse(localStorage.getItem(KEY)) || {};
-        const history = saved.history || [];
-        let tPoints = curCGPA * curCreds, tCreds = curCreds, rows = [];
-
-        document.querySelectorAll('.course-row').forEach(row => {
-            const g = parseFloat(row.querySelector('.row-grade').value),
-                c = parseFloat(row.querySelector('.row-credits').value) || 0,
-                isR = row.querySelector('.is-retake').checked,
-                target = row.querySelector('.retake-target').value;
-            if (isR && target) {
-                const old = history.find(h => h.code === target);
-                if (old) tPoints -= (getPoints(old.grade) * old.credits);
-            } else tCreds += c;
-            tPoints += (g * c);
-            rows.push({ grade: g.toString(), credits: c.toString(), retakeTarget: isR ? target : null });
-        });
-        els.finalGpa.innerText = (tCreds === 0 ? 0 : tPoints / tCreds).toFixed(2);
-        els.projCredits.innerText = tCreds;
-        localStorage.setItem(KEY, JSON.stringify({ ...saved, name: els.name.value, enrollment: els.enrollment.value, cgpa: els.cgpa.value, credits: els.credits.value, courses: rows }));
-        updateChart(); // Update graph on every change
-    }
-
-    function addCourseRow(defaultG = "4.0", defaultC = "3", target = null) {
-        const saved = JSON.parse(localStorage.getItem(KEY)) || {};
-        const history = saved.history || [];
-        const div = document.createElement('div');
-        div.className = "course-row p-6 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-[2rem] mb-6";
-        div.innerHTML = `
-            <div class="flex gap-4 mb-5">
-                <select class="row-grade flex-1 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl p-4 text-sm font-bold outline-none focus:border-blue-500">
-                    <option value="4.0" ${defaultG == 4.0 ? 'selected' : ''}>A (4.0)</option>
-                    <option value="3.7" ${defaultG == 3.7 ? 'selected' : ''}>A- (3.7)</option>
-                    <option value="0.0" ${defaultG == 0.0 ? 'selected' : ''}>F (0.0)</option>
-                </select>
-                <input type="number" value="${defaultC}" class="row-credits w-24 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl p-4 text-sm font-bold text-center outline-none">
-                <button class="remove-btn p-2 text-slate-400 hover:text-red-500 transition-colors"><i class="fas fa-trash text-lg"></i></button>
-            </div>
-            <div class="flex items-center gap-4 pt-5 border-t dark:border-slate-700">
-                <input type="checkbox" class="is-retake w-5 h-5 accent-blue-600" ${target ? 'checked' : ''}>
-                <span class="text-[11px] font-extrabold text-slate-500 uppercase tracking-tighter">RETAKE/REPEAT</span>
-                <select class="retake-target flex-1 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl py-4 px-4 text-[11px] font-bold ${target ? '' : 'hidden'}">
-                    <option value="">Select Course...</option>
-                    ${history.map(h => `<option value="${h.code}" ${target === h.code ? 'selected' : ''}>${(h.code || '')} (${(h.grade || '')}, ${(h.semester || '')})</option>`).join('')}
-                </select>
-            </div>`;
-        els.container.appendChild(div);
-        const sel = div.querySelector('.retake-target'), chk = div.querySelector('.is-retake');
-        chk.onchange = () => { sel.classList.toggle('hidden', !chk.checked); calculate(); };
-        sel.onchange = calculate;
-        div.querySelector('.row-grade').onchange = calculate;
-        div.querySelector('.row-credits').oninput = calculate;
-        div.querySelector('.remove-btn').onclick = () => { div.remove(); calculate(); };
-    }
-
-    function renderHistory(courses, semesters = []) {
-        const lastTwo = (semesters || []).slice(-2);
-        els.historyBody.innerHTML = (courses || []).map(c => {
-            const isRecent = lastTwo.includes(c.semester);
-            const cardStyle = isRecent ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-500/30" : "bg-white dark:bg-slate-800/40 border-slate-100 dark:border-slate-700/50";
-            const pillStyle = (c.grade || '').startsWith('A') ? "bg-emerald-500" : "bg-teal-500";
-            return `
-                <div class="p-6 rounded-[1.5rem] border flex justify-between items-center mb-5 shadow-sm ${cardStyle}">
-                    <div class="space-y-1">
-                        <div class="flex items-center gap-3">
-                            <span class="font-bold text-blue-500 text-sm tracking-tight">${c.code}</span>
-                            <span class="px-3 py-1 rounded-lg text-[10px] font-black text-white ${pillStyle}">${c.grade} (${(c.points || 0).toFixed(2)})</span>
-                        </div>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${c.semester}</p>
-                    </div>
-                    <button class="p-2 text-slate-300 hover:text-red-500 transition-colors" onclick="window.delGrade('${c.code}')"><i class="fas fa-trash"></i></button>
-                </div>`;
-        }).join('');
-    }
-
-    window.delGrade = (code) => {
-        if (!confirm(`⚠️ Deleting ${code} will alter your Cumulative standing. Proceed?`)) return;
-        let s = JSON.parse(localStorage.getItem(KEY));
-        s.history = s.history.filter(c => c.code !== code);
-        let bP = 0, bC = 0; s.history.forEach(c => { bP += (getPoints(c.grade) * c.credits); bC += c.credits; });
-        els.cgpa.value = (bC === 0 ? 0 : bP / bC).toFixed(2); els.credits.value = bC;
-        localStorage.setItem(KEY, JSON.stringify({ ...s, cgpa: els.cgpa.value, credits: bC }));
-        renderHistory(s.history, s.semesters); calculate();
-    };
-
-    els.resetFull.onclick = () => {
-        if (confirm("🚨 DANGER: This will delete your Name, Transcript History, and Planner. Are you sure?")) {
+    document.getElementById('resetData').onclick = () => {
+        if (confirm("Clear all loaded data?")) {
             localStorage.removeItem(KEY);
-            els.name.value = ""; els.enrollment.value = ""; els.cgpa.value = ""; els.credits.value = "";
-            els.initial.innerText = "S"; els.container.innerHTML = ""; els.historyBody.innerHTML = "";
-            els.finalGpa.innerText = "0.00"; els.projCredits.innerText = "0";
             location.reload();
         }
     };
 
-    els.pdfInput.onchange = async (e) => {
-        const f = e.target.files[0]; if (!f) return;
-        const pdf = await pdfjsLib.getDocument(await f.arrayBuffer()).promise;
-        let t = ""; for (let i = 1; i <= pdf.numPages; i++) t += (await (await pdf.getPage(i)).getTextContent()).items.map(s => s.str).join(" ");
-        const d = parseBracuTranscript(t);
-        localStorage.setItem(KEY, JSON.stringify({ name: d.studentName, enrollment: d.enrollment, cgpa: d.cgpa, credits: d.credits, history: d.courses, semesters: d.semesters }));
-        location.reload();
-    };
+    document.getElementById('pdfUpload').onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById('systemStatus').innerHTML = "Extracting data from PDF... Please wait.";
 
-    // UPDATED: Feedback with device metadata tracking
-    document.getElementById('sendFeedback').onclick = async () => {
-        const deviceInfo = {
-            screen: `${window.screen.width}x${window.screen.height}`,
-            ua: navigator.userAgent,
-            lang: navigator.language,
-            plt: navigator.platform
+        const reader = new FileReader();
+        reader.onload = async function () {
+            try {
+                const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                let text = "";
+                for (let i = 1; i <= pdf.numPages; i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(s => s.str).join(" ") + "\n";
+
+                const parsedData = parseTranscript(text);
+
+                if (parsedData.history.length === 0) {
+                    alert("PDF read successfully, but no course data matched. Ensure this is an unofficial BRACU transcript.");
+                    document.getElementById('systemStatus').innerHTML = "Extraction failed. Invalid format.";
+                    return;
+                }
+
+                localStorage.setItem(KEY, JSON.stringify(parsedData));
+                location.reload();
+            } catch (err) {
+                console.error("PDF Parse Error", err);
+                alert("Failed to parse PDF.");
+            }
         };
-        const body = {
-            name: document.getElementById('fbName').value,
-            email: document.getElementById('fbEmail').value,
-            message: document.getElementById('fbMessage').value,
-            device: deviceInfo
-        };
-        const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (res.ok) { alert("Feedback Sent!"); document.getElementById('helpModal').classList.add('hidden'); }
+        reader.readAsArrayBuffer(file);
     };
-
-    const switchTab = (i) => {
-        [document.getElementById('contentGuide'), document.getElementById('contentFeedback')].forEach((c, idx) => c.classList.toggle('hidden', idx !== i));
-        [document.getElementById('tabGuide'), document.getElementById('tabFeedback')].forEach((t, idx) => t.className = idx === i ? "flex-1 py-4 text-[10px] font-black uppercase border-b-2 border-blue-600 text-blue-600" : "flex-1 py-4 text-[10px] font-black uppercase border-b-2 border-transparent text-slate-400");
-    };
-
-    els.helpBtn.onclick = () => { els.helpModal.classList.remove('hidden'); switchTab(0); };
-    document.getElementById('tabGuide').onclick = () => switchTab(0);
-    document.getElementById('tabFeedback').onclick = () => switchTab(1);
-    document.getElementById('closeHelp').onclick = () => els.helpModal.classList.add('hidden');
-    document.getElementById('footerFeedback').onclick = (e) => { e.preventDefault(); els.helpModal.classList.remove('hidden'); switchTab(1); };
-    els.themeBtn.onclick = () => { const isD = document.documentElement.classList.toggle('dark'); localStorage.theme = isD ? 'dark' : 'light'; };
-    els.openHistory.onclick = () => { document.getElementById('sidebarOverlay').classList.remove('hidden'); setTimeout(() => document.getElementById('historySidebar').classList.add('active'), 10); };
-    els.closeHistory.onclick = () => { document.getElementById('historySidebar').classList.remove('active'); setTimeout(() => document.getElementById('sidebarOverlay').classList.add('hidden'), 300); };
-    els.name.oninput = (e) => { els.initial.innerText = e.target.value.charAt(0).toUpperCase() || "S"; calculate(); };
-    els.addBtn.onclick = () => { addCourseRow(); calculate(); };
-
-    // Initial Load
-    if (localStorage.theme === 'light') document.documentElement.classList.remove('dark');
-    const saved = JSON.parse(localStorage.getItem(KEY));
-    if (saved) {
-        els.name.value = saved.name || ""; els.enrollment.value = saved.enrollment || ""; els.cgpa.value = saved.cgpa || ""; els.credits.value = saved.credits || "";
-        els.initial.innerText = saved.name ? saved.name.charAt(0).toUpperCase() : "S";
-        if (saved.courses && saved.courses.length > 0) {
-            els.container.innerHTML = '';
-            saved.courses.forEach(c => addCourseRow(c.grade, c.credits, c.retakeTarget));
-        } else addCourseRow();
-        if (saved.history) renderHistory(saved.history, saved.semesters);
-    } else addCourseRow();
-
-    calculate();
-    updateChart(); // Draw chart on load
 });
