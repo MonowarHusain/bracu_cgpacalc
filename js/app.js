@@ -481,7 +481,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.pdfUploadGlobal').forEach(input => input.onchange = handlePDF);
 });
 
-const urls = ['https://monowar.me', 'https://mono.pro.bd', 'https://monowar.pro.bd'];
+const urls = ['https://monowar.me', 'https://mono.bro.bd', 'https://monowar.pro.bd'];
 const devLink = document.getElementById('devLink');
 const checkUrl = async (url) => { try { await fetch(url, { mode: 'no-cors' }); return true; } catch (e) { return false; } };
 (async () => { for (let url of urls) { if (await checkUrl(url)) { devLink.href = url; break; } } })();
