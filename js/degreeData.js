@@ -1,7 +1,3 @@
-/**
- * BRACU Degree Structures - Precision Stream Breakdown
- */
-
 const CSE_ELECTIVES_MASTER = [
     "CSE250", "CSE251", "CSE310", "CSE320", "CSE341", "CSE342", "CSE350", "CSE360", "CSE390", "CSE391", "CSE392",
     "CSE402", "CSE410", "CSE419", "CSE424", "CSE425", "CSE426", "CSE427", "CSE428", "CSE429", "CSE430", "CSE431",

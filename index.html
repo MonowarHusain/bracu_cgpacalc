@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CGPA Calc Pro | BRACU Degree Auditor</title>
+  <title>CGPA Calc Pro | BRACU Toolkit</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -18,7 +18,16 @@
 
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
-      transition: background-color 0.3s;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .page-view {
+      display: none;
+    }
+
+    .page-view.active {
+      display: flex;
+      animation: fadeIn 0.4s ease-in-out;
     }
 
     .tab-content {
@@ -42,130 +51,278 @@
       }
     }
 
-    .progress-remain {
-      background-color: #ef4444;
+    .modal-overlay {
+      background-color: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(5px);
     }
 
-    .progress-done {
-      background-color: #10b981;
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
   </style>
 </head>
 
-<body class="bg-[#0b1120] text-slate-200 min-h-screen">
+<body class="bg-slate-50 dark:bg-[#0b1120] text-slate-900 dark:text-slate-200 min-h-screen flex flex-col">
 
-  <nav class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black">C</div>
-        <span class="text-xl font-extrabold tracking-tight text-white">CGPACalc<span
-            class="text-blue-500">.pro</span></span>
-      </div>
+  <section id="gatewayPage"
+    class="page-view active flex-1 flex-col items-center justify-center p-6 min-h-screen relative overflow-hidden">
+    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none">
+    </div>
+    <div
+      class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none">
+    </div>
 
-      <div class="flex items-center gap-3">
-        <label
-          class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center shadow-lg shadow-blue-600/20">
-          <i class="fas fa-file-import mr-2"></i> Import Gradesheet
-          <input type="file" id="pdfUpload" accept=".pdf" class="hidden">
-        </label>
-        <button id="resetData" class="p-2.5 rounded-xl bg-slate-800 text-slate-400 hover:text-red-500 transition-all"
-          title="Clear Data"><i class="fas fa-trash"></i></button>
+    <div class="text-center mb-12 z-10">
+      <div
+        class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-3xl font-black mx-auto mb-6 shadow-xl shadow-blue-600/20">
+        C</div>
+      <h1 class="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white mb-4">CGPACalc<span
+          class="text-blue-600 dark:text-blue-500">.pro</span></h1>
+      <p class="text-slate-500 font-medium max-w-md mx-auto mb-2">The ultimate suite for BRACU students. Import your
+        transcript once and choose your toolkit.</p>
+      <div
+        class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold shadow-sm">
+        <i class="fas fa-shield-alt"></i> Data stays strictly on your device. Nothing is sent to the developer.
       </div>
     </div>
 
-    <div class="max-w-6xl mx-auto px-6 flex gap-8 border-t border-slate-800 md:border-none">
-      <button onclick="switchTab('dashboard')"
-        class="tab-link active py-4 text-xs font-black uppercase tracking-widest border-b-2 border-blue-600 text-blue-500">Dashboard</button>
-      <button onclick="switchTab('audit')"
-        class="tab-link py-4 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white">Detailed
-        Audit</button>
-      <button onclick="switchTab('history')"
-        class="tab-link py-4 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white">All
-        Grades</button>
-    </div>
-  </nav>
-
-  <main class="max-w-6xl mx-auto p-6 lg:p-10">
-
-    <section id="dashboard" class="tab-content active space-y-8">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl z-10">
+      <button onclick="launchPage('analyticsPage')"
+        class="text-left bg-white dark:bg-slate-900/80 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl hover:ring-2 hover:ring-blue-500 transition-all group">
         <div
-          class="md:col-span-2 bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 shadow-sm flex items-center gap-6">
+          class="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-500 rounded-xl flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+          <i class="fas fa-chart-pie"></i></div>
+        <h2 class="text-2xl font-black text-slate-900 dark:text-white mb-2">Degree Analytics</h2>
+        <p class="text-sm text-slate-500 mb-6">Track your 136/124 credit progress, view your GenEd breakdown, and
+          analyze your CGPA trend graph.</p>
+        <span class="text-xs font-bold text-blue-600 dark:text-blue-500 uppercase tracking-widest">Requires Import <i
+            class="fas fa-lock ml-1 text-slate-400"></i></span>
+      </button>
+
+      <button onclick="launchPredictor()"
+        class="text-left bg-white dark:bg-slate-900/80 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl hover:ring-2 hover:ring-emerald-500 transition-all group">
+        <div
+          class="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-500 rounded-xl flex items-center justify-center text-xl mb-6 group-hover:scale-110 transition-transform">
+          <i class="fas fa-calculator"></i></div>
+        <h2 class="text-2xl font-black text-slate-900 dark:text-white mb-2">CGPA Predictor</h2>
+        <p class="text-sm text-slate-500 mb-6">Fresher Friendly! Plan your upcoming semester, add new courses, simulate
+          retakes, and predict your CGPA.</p>
+        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest">Launch Tool <i
+            class="fas fa-arrow-right ml-1"></i></span>
+      </button>
+    </div>
+
+    <div class="mt-12 z-10 flex flex-col items-center">
+      <label
+        class="cursor-pointer bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all shadow-xl hover:scale-105">
+        <i class="fas fa-upload mr-2"></i> Import Transcript PDF to Start
+        <input type="file" id="pdfUploadGateway" accept=".pdf" class="hidden">
+      </label>
+      <p id="gatewayStatus" class="text-xs text-slate-500 mt-4 font-bold"></p>
+    </div>
+  </section>
+
+  <section id="analyticsPage" class="page-view flex-1 flex-col">
+    <nav
+      class="border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-[#0b1120]/90 backdrop-blur-xl sticky top-0 z-50">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <button onclick="goToMenu()"
+          class="text-sm font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-2">
+          <i class="fas fa-arrow-left"></i> Back to Menu
+        </button>
+        <div class="flex items-center gap-3">
+          <label
+            class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"><i
+              class="fas fa-sync-alt mr-1"></i> Re-Import<input type="file" class="pdfUploadGlobal hidden"
+              accept=".pdf"></label>
+          <button
+            class="helpBtn p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 hover:text-blue-500"><i
+              class="fas fa-comment-dots"></i></button>
+          <button class="themeToggle p-2 rounded-xl bg-slate-100 dark:bg-slate-800"><i
+              class="fas fa-sun text-yellow-500 dark:hidden"></i><i
+              class="fas fa-moon text-blue-400 hidden dark:block"></i></button>
+          <button class="resetDataBtn p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500"
+            title="Factory Reset"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      <div
+        class="max-w-6xl mx-auto px-6 flex gap-6 border-t border-slate-200 dark:border-slate-800 md:border-none overflow-x-auto no-scrollbar">
+        <button onclick="switchTab('dashboard')"
+          class="tab-link active py-4 text-xs font-black uppercase tracking-widest border-b-2 border-blue-600 text-blue-600 dark:text-blue-500 whitespace-nowrap">Dashboard</button>
+        <button onclick="switchTab('audit')"
+          class="tab-link py-4 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white whitespace-nowrap">Detailed
+          Audit</button>
+        <button onclick="switchTab('history')"
+          class="tab-link py-4 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white whitespace-nowrap">All
+          Grades</button>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6 lg:p-10 flex-1 w-full">
+      <section id="dashboard" class="tab-content active space-y-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div
-            class="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-lg shadow-blue-600/20"
-            id="nameInitial">G</div>
-          <div>
-            <h1 id="studentNameDisplay" class="text-2xl font-black text-white">Guest Student</h1>
-            <p class="text-blue-500 font-bold text-xs uppercase tracking-widest mt-1" id="navUserPlan">Import transcript
-              to auto-detect</p>
+            class="md:col-span-2 bg-white dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-6">
+            <div
+              class="w-20 h-20 rounded-3xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-lg shadow-blue-600/20"
+              id="nameInitial">G</div>
+            <div>
+              <h1 id="studentNameDisplay" class="text-2xl font-black text-slate-900 dark:text-white">Guest Student</h1>
+              <p class="text-blue-600 dark:text-blue-500 font-bold text-xs uppercase tracking-widest mt-1"
+                id="navUserPlan">Import transcript</p>
+            </div>
+          </div>
+          <div
+            class="bg-emerald-500 p-8 rounded-[2rem] shadow-xl text-white flex flex-col justify-center items-center text-center">
+            <p class="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">Official CGPA</p>
+            <h2 id="finalGPA" class="text-6xl font-black tracking-tighter">0.00</h2>
           </div>
         </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div
+            class="lg:col-span-2 bg-white dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-xl font-black text-slate-900 dark:text-white">Performance Analytics</h2>
+              <div class="flex gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span class="flex items-center gap-2">
+                  <div class="w-3 h-3 bg-red-500 rounded-sm"></div> CGPA
+                </span>
+                <span class="flex items-center gap-2">
+                  <div class="w-3 h-3 bg-emerald-500 rounded-sm"></div> Sem GPA
+                </span>
+              </div>
+            </div>
+            <div class="h-[450px] w-full"><canvas id="cgpaChart"></canvas></div>
+          </div>
+          <div class="space-y-8">
+            <div
+              class="bg-white dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-center h-full">
+              <div class="flex justify-between items-end mb-4">
+                <h2 class="text-sm font-black uppercase tracking-widest text-slate-500">Degree Completion</h2>
+                <span id="progressText" class="text-xl font-black text-slate-900 dark:text-white">0 / 0 Credits</span>
+              </div>
+              <div class="w-full bg-slate-100 dark:bg-slate-800 h-4 rounded-full overflow-hidden flex mb-2">
+                <div id="degreeProgressBar" class="bg-blue-600 h-full transition-all duration-1000" style="width: 0%">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="audit" class="tab-content space-y-8">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl font-black text-slate-900 dark:text-white">Requirement Breakdown</h2>
+          <div id="waiverBadgeDetail"
+            class="px-4 py-2 rounded-full text-xs font-black bg-slate-100 dark:bg-slate-800 text-slate-500">NO WAIVER
+          </div>
+        </div>
+        <div id="auditList" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+      </section>
+
+      <section id="history" class="tab-content space-y-6">
+        <h2 class="text-2xl font-black text-slate-900 dark:text-white">Full Transcript</h2>
+        <div id="historyTable" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </section>
+    </main>
+  </section>
+
+  <section id="predictorPage" class="page-view flex-1 flex-col">
+    <nav
+      class="border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-[#0b1120]/90 backdrop-blur-xl sticky top-0 z-50">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <button onclick="goToMenu()"
+          class="text-sm font-black uppercase tracking-widest text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-2">
+          <i class="fas fa-arrow-left"></i> Back to Menu
+        </button>
+        <div class="flex items-center gap-3">
+          <label
+            class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"><i
+              class="fas fa-sync-alt mr-1"></i> Re-Import<input type="file" class="pdfUploadGlobal hidden"
+              accept=".pdf"></label>
+          <button
+            class="helpBtn p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 hover:text-blue-500"><i
+              class="fas fa-comment-dots"></i></button>
+          <button class="themeToggle p-2 rounded-xl bg-slate-100 dark:bg-slate-800"><i
+              class="fas fa-sun text-yellow-500 dark:hidden"></i><i
+              class="fas fa-moon text-blue-400 hidden dark:block"></i></button>
+          <button class="resetDataBtn p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500"
+            title="Factory Reset"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      <div class="max-w-6xl mx-auto px-6 py-4 border-t border-slate-200 dark:border-slate-800 md:border-none">
+        <h2 class="text-xl font-black text-slate-900 dark:text-white">CGPA Predictor Toolkit</h2>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6 lg:p-10 flex-1 w-full space-y-8">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div
-          class="bg-emerald-500 p-8 rounded-[2rem] shadow-xl text-white flex flex-col justify-center items-center text-center">
-          <p class="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">Official CGPA</p>
-          <h2 id="finalGPA" class="text-6xl font-black tracking-tighter">0.00</h2>
+          class="lg:col-span-2 bg-white dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-black text-slate-900 dark:text-white">Semester Predictor</h2>
+            <button id="addCourseBtn"
+              class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">+
+              Add Course</button>
+          </div>
+          <p class="text-xs text-slate-500 mb-6">Simulate your upcoming semester. If you are retaking a course, check
+            the box and type the exact old course code (e.g. CSE110) to accurately replace it.</p>
+
+          <div id="predictorRows" class="space-y-4"></div>
+        </div>
+
+        <div
+          class="bg-emerald-500 p-8 rounded-[2rem] shadow-xl text-white flex flex-col justify-center items-center text-center sticky top-32 h-64">
+          <p class="text-xs font-bold opacity-80 uppercase tracking-widest mb-2">Projected New CGPA</p>
+          <h2 id="projectedCgpaDisplay" class="text-7xl font-black tracking-tighter mb-2">0.00</h2>
+          <p class="text-sm font-medium opacity-90"><span id="projectedCreditsDisplay">0</span> Total Credits</p>
         </div>
       </div>
 
-      <div class="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800">
-        <div class="flex justify-between items-end mb-4">
-          <h2 class="text-sm font-black uppercase tracking-widest text-slate-400">Overall Completion</h2>
-          <span id="progressText" class="text-xl font-black text-white">0 / 0 Credits</span>
-        </div>
-        <div class="w-full bg-red-500/20 h-4 rounded-full overflow-hidden flex">
-          <div id="degreeProgressBar" class="progress-done h-full transition-all duration-1000" style="width: 0%"></div>
-        </div>
-        <div class="flex justify-between mt-2 text-[10px] font-bold uppercase tracking-widest">
-          <span class="text-emerald-500">Completed</span>
-          <span class="text-red-500">Remaining</span>
-        </div>
+      <div
+        class="bg-white dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm mt-8">
+        <h2 class="text-xl font-black text-slate-900 dark:text-white mb-2">Edit Current History</h2>
+        <p class="text-xs text-slate-500 mb-6">Review your base history. Remove courses to simulate dropping them. Your
+          base CGPA will recalculate automatically.</p>
+        <div id="predictorHistoryList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </div>
+    </main>
+  </section>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div class="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 h-80">
-          <canvas id="cgpaChart"></canvas>
-        </div>
-        <div class="bg-slate-900/50 p-8 rounded-[2rem] border border-slate-800 space-y-4 flex flex-col justify-center">
-          <h3 class="text-sm font-black uppercase text-slate-400 mb-2">Import Status</h3>
-          <p id="systemStatus" class="text-xs text-slate-500 leading-relaxed">No data loaded. Please import your
-            Unofficial Transcript PDF from BRACU Connect to populate your dashboard.</p>
-        </div>
-      </div>
-    </section>
+  <div id="feedbackModal" class="fixed inset-0 z-[60] hidden modal-overlay flex items-center justify-center p-4">
+    <div id="feedbackBox"
+      class="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-8">
+      <h3 class="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">Send Feedback</h3>
+      <p class="text-xs text-slate-500 mb-4">Report an issue or suggest a feature.</p>
 
-    <section id="audit" class="tab-content space-y-8">
-      <div class="flex justify-between items-center">
-        <h2 class="text-2xl font-black text-white">Requirement Breakdown</h2>
-        <div id="waiverBadgeDetail" class="px-4 py-2 rounded-full text-xs font-black bg-slate-800 text-slate-500">NO
-          WAIVER</div>
-      </div>
-      <div id="auditList" class="grid grid-cols-1 gap-6">
-      </div>
-    </section>
+      <input type="text" id="fbName" placeholder="Name (Optional)"
+        class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 text-sm mt-2 text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500">
+      <input type="email" id="fbEmail" placeholder="Email (Optional)"
+        class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 text-sm mt-4 text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500">
+      <textarea id="fbMessage" rows="4" placeholder="Describe the issue or feature..."
+        class="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 text-sm mt-4 text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500"></textarea>
 
-    <section id="history" class="tab-content space-y-6">
-      <h2 class="text-2xl font-black text-white">Full Transcript</h2>
-      <div id="historyTable" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      </div>
-    </section>
+      <button id="sendFeedbackBtn"
+        class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl text-xs uppercase mt-4 hover:bg-blue-500 transition-colors">Submit</button>
+      <button id="closeFeedback"
+        class="w-full mt-4 text-[10px] font-bold uppercase opacity-50 dark:text-white hover:opacity-100">Cancel</button>
+    </div>
+  </div>
 
-  </main>
+  <footer id="mainFooter" class="border-t border-slate-200 dark:border-slate-800 mt-auto py-8 text-center hidden">
+    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+      ©
+      <script>document.write(new Date().getFullYear())</script>
+      <a href="https://monowar.me" id="devLink" target="_blank"
+        class="text-blue-600 dark:text-blue-500 hover:underline">Monowar Husain Omi</a>
+    </p>
+  </footer>
 
   <script src="js/degreeData.js"></script>
   <script src="js/app.js"></script>
-  <script>
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-link').forEach(l => {
-        l.classList.remove('active', 'border-blue-600', 'text-blue-500');
-        l.classList.add('border-transparent', 'text-slate-500');
-      });
-
-      document.getElementById(tabId).classList.add('active');
-      event.currentTarget.classList.add('active', 'border-blue-600', 'text-blue-500');
-      event.currentTarget.classList.remove('border-transparent', 'text-slate-500');
-    }
-  </script>
 </body>
 
 </html>
